@@ -51,6 +51,8 @@ export type SectionContext = {
   readonly row: RowFactory;
   /** Replaces the result slot while the key map is open. */
   readonly helpLines: readonly string[] | null;
+  /** The verb pressed microseconds ago, so the key that was used is visible. */
+  readonly lastVerb: string | null;
 };
 
 const BRANCH_MAX = 26;
@@ -177,7 +179,11 @@ export function actionsSection(context: SectionContext): Section {
     for (const cell of cells) {
       const plain = `${cell.key} ${cell.verb}`;
       if (rendered.length > 0) column += 3;
-      rendered.push(`${theme.fg(keyStyle, cell.key)} ${theme.fg(verbStyle, cell.verb)}`);
+      // The verb that was just used keeps its emphasis for a couple of seconds.
+      const used = context.lastVerb === cell.verb;
+      const cellVerbStyle = used ? "accent" : verbStyle;
+      const cellKeyStyle = used ? "accent" : keyStyle;
+      rendered.push(`${theme.fg(cellKeyStyle, cell.key)} ${theme.fg(cellVerbStyle, cell.verb)}`);
       if (data.running === null) {
         hits.push({ rowOffset, start: column, length: plain.length, action: { kind: "verb", verb: cell.verb } });
       }

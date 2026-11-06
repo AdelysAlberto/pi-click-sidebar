@@ -25,6 +25,8 @@ export type PresenterOptions = {
   readonly config: () => Config;
   /** The live theme: compared by identity so a theme change rebuilds the lane. */
   readonly getTheme: () => Theme;
+  /** A key the panel does not use: the editor gets it instead of losing it. */
+  readonly forwardToEditor: (data: string) => void;
 };
 
 export type PanelPresenter = {
@@ -85,6 +87,16 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
       onClose: options.onBlur,
       onCommand: options.onCommand,
       onAction: options.onAction,
+      isFocused: () => {
+        const host = tuiHost as FocusHost | undefined;
+        return laneComponent !== undefined && host?.getFocusedComponent?.() === laneComponent;
+      },
+      onUnhandledKey: (data) => {
+        // Losing keystrokes because the panel had focus is worse than the
+        // panel being display-only: hand the key over and give focus back.
+        options.forwardToEditor(data);
+        presenter.blurDock();
+      },
     });
 
   const dockSupport = (): boolean => probeDockSupport(tuiHost).supported;
@@ -98,7 +110,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
       dockMinTerminalWidth: options.config().dockMinTerminalWidth,
     });
 
-  return {
+  const presenter: PanelPresenter = {
     repaint,
     surface,
     currentSurface: () => surface(process.stdout.columns > 0 ? process.stdout.columns : 80),
@@ -108,7 +120,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
       const host = tuiHost as FocusHost | undefined;
       if (host?.getFocusedComponent === undefined || host.setFocus === undefined) return;
       if (laneComponent !== undefined && host.getFocusedComponent() === laneComponent) {
-        this.blurDock();
+        presenter.blurDock();
         return;
       }
       previousFocus = host.getFocusedComponent() ?? null;
@@ -178,7 +190,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
         // A theme change is a new component: the lane is not styled dynamically.
         dock.restore();
         dock = null;
-        this.mountDock(tuiHost, read);
+        presenter.mountDock(tuiHost, read);
         return;
       }
       dock.reconcile();
@@ -192,6 +204,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
           header: OVERLAY_HEADER,
           onCommand: options.onCommand,
           onAction: options.onAction,
+          onUnhandledKey: options.forwardToEditor,
           exposeClose: (close) => {
             closeCurrent = () => {
               closeCurrent = undefined;
@@ -216,4 +229,6 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
       dock = null;
     },
   };
+
+  return presenter;
 }

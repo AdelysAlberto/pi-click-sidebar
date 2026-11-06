@@ -325,6 +325,17 @@ Release verification, once `main` and `v0.1.0` were pushed:
 `patch`, `minor`, `major` and `tag`, refuses a dirty tree or a branch other than `main`, moves
 `## [Unreleased]` into a dated heading, commits and tags, and pushes only with `--push`.
 
+## Corrections after first real use (0.1.2)
+
+The first session with a human at the keyboard found four things unit tests could not:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "the app is frozen, my typing disappears" | with the dock focused, unbound keys were dropped instead of forwarded | printable keys go to the editor and focus returns; the frame and a hint row show focus |
+| "`fetch is still running` forever" | a `git fetch` to a silent remote blocks for the whole network timeout, and the progress ticker repainted five times a second | `esc` cancels the verb through the `AbortSignal`; the ticker is one repaint per second; the error message is no longer rewritten into a fake timeout |
+| "the modal buttons are not clickable" | `actionsRow` was measured after the hint row, so clicks landed one row away and the hint row submitted | the row index is taken before the hint is pushed, and the button ranges come from the render |
+| "`s` did nothing" | the panel needs focus, and nothing said so | `alt+g focus` is shown while unfocused |
+
 ## Out of scope for v1
 
 Recorded so nobody half-implements them: `commit`, `stash`, merge/rebase conflict resolution, PR

@@ -157,9 +157,20 @@ Keyboard is complete on its own; the mouse is an accelerator, never the only pat
 | `esc` | focused / modal | Leave focus, or close the modal |
 | `?` | focused | Show the key map inline in the result slot |
 
-Dock focus: `tui.setFocus(dockComponent)` on `alt+g` when the dock is already visible, `setFocus`
-back to the editor on `esc`. The dock is display-only until focused, so typing in the editor is never
-interrupted.
+Dock focus: `tui.setFocus(dockComponent)` on `alt+g` when the dock is already visible, `setFocus` back to
+the editor on `esc`. The dock is display-only until focused, so typing in the editor is never interrupted.
+
+Three rules that came from using it, not from designing it:
+
+- **Focus is visible.** Unfocused, the frame uses `border` and the panel shows `alt+g focus`; focused, the
+  frame uses `borderAccent` and the panel shows `panel focused · esc → editor`. A focus change you cannot
+  see is indistinguishable from a frozen app.
+- **No keystroke is swallowed.** Any printable character the panel does not bind is appended to the editor
+  and focus returns there. A focused panel that silently eats typing is the single most confusing thing
+  this extension can do.
+- **A running verb can be cancelled.** `esc` aborts the command in flight and keeps focus; `esc` again
+  leaves the panel. A `git fetch` to a remote that does not answer would otherwise block for the whole
+  network timeout with no way out.
 
 | Mouse | Target | Action |
 |---|---|---|
@@ -200,7 +211,11 @@ start?"* — the base is shown before the name is typed.
   (`git show-ref --verify`), reject an empty name, reject a name starting with `-`.
 - Dirty tree, no name: `switch` is disabled and the hint reads `2 uncommitted files · commit or discard
   first`. No stash is performed in v1.
-- `enter` submits, `esc` cancels, `tab` moves between list and input.
+- `enter` submits, `esc` cancels, `tab` moves between the three stops: the base list, the name field and
+  the buttons. On the buttons, `←`/`→` pick `switch` or `cancel` and `enter` activates the armed one; the
+  armed button is drawn with `selectedBg` so "which one has the keyboard" is never a guess.
+- The base list and both buttons are clickable, and the row they occupy is derived from the last render, so
+  a click can never land one row away from what it looks like.
 
 ## 7. Copy deck
 

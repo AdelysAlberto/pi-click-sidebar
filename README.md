@@ -68,11 +68,12 @@ while it has focus, and `esc` gives focus back to the editor (or to whatever had
 | `?` | panel focused | key map, inline in the result slot |
 | `j` `k` `↓` `↑` | panel focused | move the cursor |
 | `enter` | panel focused | run what the cursor is on |
-| `esc` | panel focused | leave the panel; in the modal, cancel |
-| `↑` `↓` `tab` `enter` `esc` | branch modal | pick a base, move between list and name, submit, cancel |
+| `esc` | panel focused | cancel the verb in flight, then leave the panel; in the modal, cancel |
+| `↑` `↓` `tab` `enter` `esc` | branch modal | pick a base, `tab` cycles list → name → buttons, `←`/`→` picks a button, `enter` activates it |
 
 Mouse: clicking a verb runs it, clicking the branch name opens the modal, clicking `CHANGES` reports the
-file list, clicking the project path shows the absolute path. Regular mode leaves mouse input to the
+file list, clicking the project path shows the absolute path, and inside the modal a branch row selects the
+base and each button runs its action. Regular mode leaves mouse input to the
 terminal, which is why every one of those has a key.
 
 ## Configuration
@@ -124,6 +125,9 @@ model request runs `fetch`, `pull`, `push` or `switch`.
   `docs/upstream/tui-layout-root.md` proposes documenting it. Report `pi --version` with any dock bug.
 - **HTTPS remotes without a credential block until the timeout.** Pi's `exec` exposes no `env`, so
   `GIT_TERMINAL_PROMPT=0` cannot be set: use an SSH remote or a credential helper.
+- **Focus is visible and reversible.** Unfocused the lane shows `alt+g focus`; focused it shows
+  `panel focused · esc → editor`. Text typed while the lane has focus goes to the editor, and `esc` cancels
+  a verb that is still running.
 - **The refresh tick costs two `git` processes.** Measured on 6 000 files with 800 dirty paths: probe plus
   status is 21.9 ms median, the tick that also runs `--shortstat` is 86.2 ms, which is why the interval
   defaults to 6 s and the deltas run every third tick. A slow tick never blocks a frame.

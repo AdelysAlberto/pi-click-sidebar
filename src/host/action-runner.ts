@@ -1,16 +1,21 @@
 /**
  * Runs one verb at a time and owns the progress/result state the panel shows.
  *
- * The ticker that updates `⏵ fetch… 1.2s` exists only while an action runs and
- * is cleared with it: the refresh timer stays the single periodic timer
- * (`docs/03-architecture.md` §5), and this is a scoped exception with a known
- * lifetime, not a second scheduler.
+ * Three rules that came from real use:
+ * - the progress line ticks once per second, not five times: every repaint of
+ *   the lane re-renders the whole frame, and on a long resumed transcript that
+ *   is the difference between "working" and "crawling";
+ * - an action can be cancelled. A `git fetch` to a remote that does not answer
+ *   blocks until the network timeout, and watching a number grow for a minute
+ *   with no way out reads as a freeze;
+ * - `running` is cleared on every exit path, including a cancellation and a
+ *   failure to even start, so the verb row can never lock itself out.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Config } from "../config.ts";
 import { fetchRemote, pullFastForward, pushBranch, type Verb } from "../git/actions.ts";
 import type { GitRun } from "../git/exec.ts";
-import { failureLine, progress, success, timeoutLine } from "../view/copy.ts";
+import { failureLine, progress, success } from "../view/copy.ts";
 import type { ActionState, SessionInfo } from "../view/model.ts";
 
 export type ActionRunnerDeps = {
@@ -26,16 +31,19 @@ export type ActionRunnerDeps = {
 export type ActionRunner = {
   state(): ActionState;
   run(verb: Verb): Promise<void>;
+  /** Aborts the action in flight; the promise settles and `running` clears. */
+  cancel(): boolean;
   /** Clears the ticker. Safe to call twice. */
   dispose(): void;
 };
 
-const PROGRESS_INTERVAL_MS = 200;
+const PROGRESS_INTERVAL_MS = 1000;
 const RESULT_HOLD_MS = 6000;
 
 export function createActionRunner(deps: ActionRunnerDeps): ActionRunner {
   let state: ActionState = { running: null, result: null };
   let ticker: ReturnType<typeof setInterval> | undefined;
+  let abort: AbortController | undefined;
 
   const clearTicker = (): void => {
     if (ticker !== undefined) clearInterval(ticker);
@@ -53,17 +61,30 @@ export function createActionRunner(deps: ActionRunnerDeps): ActionRunner {
     const ctx = deps.ctx();
     if (ctx === undefined) return;
     if (state.running !== null) {
-      ctx.ui.notify(`click-sidebar: ${state.running} is still running`, "warning");
+      ctx.ui.notify(`click-sidebar: ${state.running} is still running · esc cancels it`, "warning");
       return;
     }
 
-    const settings = deps.config();
+    let settings: Config;
+    try {
+      settings = deps.config();
+    } catch {
+      // A config that cannot be read must not leave the panel locked.
+      state = { running: null, result: { kind: "fail", line: failureLine(verb, "configuration unavailable") } };
+      deps.repaint();
+      return;
+    }
+
     const startedAt = Date.now();
-    state = { running: verb, result: { kind: "running", line: progress(verb, "0.0") } };
+    const controller = new AbortController();
+    abort = controller;
+    state = { running: verb, result: { kind: "running", line: progress(verb, "0") } };
     deps.repaint();
+    // One repaint per second: the elapsed figure changes once per second, so a
+    // faster tick only re-renders the frame for nothing.
     ticker = setInterval(() => {
-      const tenths = ((Date.now() - startedAt) / 1000).toFixed(1);
-      state = { running: verb, result: { kind: "running", line: progress(verb, tenths) } };
+      const seconds = Math.floor((Date.now() - startedAt) / 1000);
+      state = { running: verb, result: { kind: "running", line: progress(verb, String(seconds)) } };
       deps.repaint();
     }, PROGRESS_INTERVAL_MS);
 
@@ -71,6 +92,7 @@ export function createActionRunner(deps: ActionRunnerDeps): ActionRunner {
       run: deps.git,
       cwd: deps.session().cwd,
       timeouts: settings.timeouts,
+      signal: controller.signal,
       confirm: (message: string) => ctx.ui.confirm("click-sidebar", message),
     };
 
@@ -82,21 +104,23 @@ export function createActionRunner(deps: ActionRunnerDeps): ActionRunner {
             ? await pullFastForward(callDeps)
             : await pushBranch(callDeps);
 
-      const tenths = ((Date.now() - startedAt) / 1000).toFixed(1);
+      const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
       if (outcome.ok) {
         state = {
           running: null,
-          result: { kind: "ok", line: success(verb, outcome.value.detail, tenths), at: Date.now() },
+          result: { kind: "ok", line: success(verb, outcome.value.detail, seconds), at: Date.now() },
         };
       } else {
-        const reason =
-          outcome.error.code === "timeout"
-            ? timeoutLine(Math.round(settings.timeouts.network / 1000))
-            : outcome.error.message;
-        state = { running: null, result: { kind: "fail", line: failureLine(verb, reason) } };
+        // The error already speaks: `cancelled`, `timed out after Ns`, or git's own
+        // sentence. Rewriting it here is how a cancellation became a fake timeout.
+        state = { running: null, result: { kind: "fail", line: failureLine(verb, outcome.error.message) } };
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      state = { running: null, result: { kind: "fail", line: failureLine(verb, message) } };
     } finally {
       clearTicker();
+      abort = undefined;
     }
 
     await deps.refresh();
@@ -107,6 +131,11 @@ export function createActionRunner(deps: ActionRunnerDeps): ActionRunner {
   return {
     state: () => state,
     run,
+    cancel(): boolean {
+      if (abort === undefined) return false;
+      abort.abort();
+      return true;
+    },
     dispose: clearTicker,
   };
 }

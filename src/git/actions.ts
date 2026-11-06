@@ -30,6 +30,8 @@ export type Deps = {
   readonly run: GitRun;
   readonly cwd: string;
   readonly timeouts: Timeouts;
+  /** Cancels the network commands; local reads always finish. */
+  readonly signal?: AbortSignal;
   /** Injected so a test can answer without a terminal. */
   readonly confirm: (message: string) => Promise<boolean>;
 };
@@ -113,7 +115,11 @@ async function runNet(
   cwd: string,
   verb: Verb,
 ): Promise<Result<{ stdout: string; stderr: string }>> {
-  const result = await deps.run(args, { cwd, timeoutMs: deps.timeouts.network });
+  const result = await deps.run(args, {
+    cwd,
+    timeoutMs: deps.timeouts.network,
+    ...(deps.signal === undefined ? {} : { signal: deps.signal }),
+  });
   if (!result.ok) return result;
   if (result.value.code !== 0) return failed(result.value.stderr, verb);
   return ok({ stdout: result.value.stdout, stderr: result.value.stderr });

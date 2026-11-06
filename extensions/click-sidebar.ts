@@ -46,7 +46,18 @@ export default function clickSidebar(pi: ExtensionAPI): void {
       const ctx = activeCtx;
       if (ctx !== undefined) void openPanel(ctx);
     },
-    onBlur: () => presenter.blurDock(),
+    onBlur: () => {
+      // esc first cancels the verb in flight; a second esc leaves the panel.
+      if (runner.cancel()) return;
+      presenter.blurDock();
+    },
+    forwardToEditor: (data: string) => {
+      const ctx = activeCtx;
+      if (ctx === undefined) return;
+      // The panel had the keyboard and the key was not its own: put it where the
+      // operator meant it, at the end of what the editor already holds.
+      ctx.ui.setEditorText(`${ctx.ui.getEditorText()}${data}`);
+    },
     config: (): Config => {
       const base = cached?.config ?? DEFAULT_CONFIG;
       return modeOverride === undefined ? base : { ...base, mode: modeOverride };

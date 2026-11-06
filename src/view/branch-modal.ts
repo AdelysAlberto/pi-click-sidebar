@@ -6,7 +6,7 @@
  * creates the branch **from that base** without moving the working tree first.
  */
 import type { Component } from "@earendil-works/pi-tui";
-import { Input, Key, matchesKey } from "@earendil-works/pi-tui";
+import { Input, Key, matchesKey, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { padToWidth, rightEllipsis } from "./text.ts";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Branch } from "../git/refs.ts";
@@ -63,10 +63,19 @@ export function createBranchModal(props: BranchModalProps): Component {
   const theme = props.theme;
   const currentIndex = props.branches.findIndex((branch) => branch.name === props.current);
   let selected = currentIndex >= 0 ? currentIndex : 0;
-  let focus: "list" | "input" = props.intent === "create" ? "input" : "list";
+  let focus: "list" | "input" | "actions" = props.intent === "create" ? "input" : "list";
+  /** Which button is armed while focus is on the actions row. */
+  let action: "switch" | "cancel" = "switch";
   let name = "";
   let error: string | null = null;
   let busy = false;
+  /** Row indices of the last render, for the click map. */
+  let listStart = 0;
+  let actionsRow = 0;
+  let columnWidth = 0;
+  /** Button ranges in component coordinates, filled at render time. */
+  let switchRange: readonly [number, number] = [0, 0];
+  let cancelRange: readonly [number, number] = [0, 0];
 
   const input = new Input();
   input.setValue("");
@@ -102,8 +111,10 @@ export function createBranchModal(props: BranchModalProps): Component {
       // on styled text both miscounts and can cut a sequence in half.
       const line = (text: string): string => `${frame("│")} ${padToWidth(text, column)} ${frame("│")}`;
 
+      columnWidth = column;
       const rows: string[] = [frame(`╭─ ${props.intent === "create" ? "new branch" : "switch branch"} ${"─".repeat(Math.max(0, inner - 16))}╮`)];
       rows.push(line(theme.fg("accent", theme.bold("base"))));
+      listStart = rows.length;
       for (const [index, branch] of props.branches.entries()) {
         const marker = index === selected ? theme.fg("accent", ">") : " ";
         const label = branch.name === props.current ? `${branch.name} (current)` : branch.name;
@@ -129,27 +140,83 @@ export function createBranchModal(props: BranchModalProps): Component {
       }
       if (busy) rows.push(line(theme.fg("accent", "working…")));
 
-      const action = props.dirtyFiles > 0 ? theme.fg("dim", "[ switch ]") : theme.fg("text", "[ switch ]");
       rows.push(line(""));
-      rows.push(line(`${action}  ${theme.fg("muted", "[ cancel ]")}  ${theme.fg("dim", "tab name · enter · esc")}`));
+      const disabled = props.dirtyFiles > 0;
+      const button = (label: string, armed: boolean, off: boolean): string => {
+        if (armed && focus === "actions") return theme.style(` ${label} `, { inverse: true });
+        if (off) return theme.fg("dim", ` ${label} `);
+        return theme.fg("muted", ` ${label} `);
+      };
+      const switchButton = button("switch", action === "switch", disabled);
+      const cancelButton = button("cancel", action === "cancel", false);
+      // The label is one column in from the frame, and the buttons are one column apart.
+      const switchStart = 3;
+      const switchEnd = switchStart + "switch".length - 1;
+      const cancelStart = switchEnd + 3;
+      const cancelEnd = cancelStart + "cancel".length - 1;
+      switchRange = [switchStart, switchEnd];
+      cancelRange = [cancelStart, cancelEnd];
+      rows.push(line(`${switchButton} ${cancelButton} ${theme.fg("dim", focus === "actions" ? "←→ pick · enter" : "tab · enter · esc")}`));
+      // The button row index, taken before the hint row is pushed: an off-by-one
+      // here makes the hint clickable and the buttons inert.
+      actionsRow = rows.length - 1;
+      rows.push(line(theme.fg("dim", focus === "list" ? "↑↓ base · tab name" : focus === "input" ? "type the name · tab buttons" : "")));
       rows.push(frame(`╰${"─".repeat(inner)}╯`));
       return rows;
     },
 
     invalidate: () => input.invalidate(),
 
+    handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+      if (event.type !== "press" && event.type !== "click") return undefined;
+      const index = event.y - listStart;
+      if (index >= 0 && index < props.branches.length && event.x > 0 && event.x <= columnWidth) {
+        selected = index;
+        focus = "list";
+        error = null;
+        props.requestRender();
+        return { handled: true, focus: true };
+      }
+      if (event.y === actionsRow) {
+        const inSwitch = event.x >= switchRange[0] && event.x <= switchRange[1];
+        const inCancel = event.x >= cancelRange[0] && event.x <= cancelRange[1];
+        if (!inSwitch && !inCancel) return undefined;
+        action = inCancel ? "cancel" : "switch";
+        focus = "actions";
+        if (inCancel) {
+          props.onClose();
+          return { handled: true, focus: true };
+        }
+        void submit();
+        return { handled: true, focus: true };
+      }
+      return undefined;
+    },
+
     handleInput(data: string): void {
       if (matchesKey(data, Key.escape)) {
         props.onClose();
         return;
       }
-      if (matchesKey(data, Key.tab)) {
-        focus = focus === "list" ? "input" : "list";
+      if (matchesKey(data, Key.tab) || (matchesKey(data, Key.down) && focus === "actions")) {
+        focus = focus === "list" ? "input" : focus === "input" ? "actions" : "list";
+        if (focus === "actions") action = props.dirtyFiles > 0 ? "cancel" : "switch";
         props.requestRender();
         return;
       }
       if (matchesKey(data, Key.enter)) {
+        if (focus === "actions" && action === "cancel") {
+          props.onClose();
+          return;
+        }
         void submit();
+        return;
+      }
+      if (focus === "actions") {
+        if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) {
+          action = action === "switch" ? "cancel" : "switch";
+          props.requestRender();
+        }
         return;
       }
       if (focus === "list") {

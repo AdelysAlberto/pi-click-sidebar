@@ -77,15 +77,27 @@ export type SidebarProps = {
   readonly onCommand: (command: PanelCommand) => void;
   /** Mouse targets, resolved by column and row against what was drawn. */
   readonly onAction?: (action: HitAction) => void;
+  /** True when the panel holds the keyboard: the frame says so. */
+  readonly isFocused?: () => boolean;
+  /**
+   * A key the panel does not own. Forwards it to the editor instead of dropping
+   * it: a focused panel that silently eats typing reads as a frozen app.
+   */
+  readonly onUnhandledKey?: (data: string) => void;
 };
 
 const MIN_WIDTH = 24;
 /** One frame column plus one column of padding on each side. */
 export const CONTENT_OFFSET = 2;
+/** How long the verb that was just pressed stays highlighted. */
+const VERB_FLASH_MS = 2500;
 
 export function createSidebar(props: SidebarProps): Component {
   const theme = props.theme;
   let helpVisible = false;
+  let lastVerb: string | null = null;
+  let flashedAt = 0;
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
   let hits: HitMap = { regions: [], width: 0 };
 
   const render = (requested: number): string[] => {
@@ -94,7 +106,9 @@ export function createSidebar(props: SidebarProps): Component {
     const column = inner - 2;
     const data = props.read();
 
-    const frame = (segment: string): string => theme.fg("border", segment);
+    const focused = props.isFocused?.() === true;
+    // The focused border is the only signal that the keyboard is not the editor's.
+    const frame = (segment: string): string => theme.fg(focused ? "borderAccent" : "border", segment);
     const row = (styled: string): string => `${frame("│")} ${padToWidth(styled, column)} ${frame("│")}`;
 
     const context: SectionContext = {
@@ -103,6 +117,7 @@ export function createSidebar(props: SidebarProps): Component {
       column,
       row,
       helpLines: helpVisible ? keyMapLines() : null,
+      lastVerb: lastVerb !== null && Date.now() - flashedAt < VERB_FLASH_MS ? lastVerb : null,
     };
 
     const sections: Section[] = [
@@ -117,6 +132,13 @@ export function createSidebar(props: SidebarProps): Component {
     const head: string[] = [frame(`╭${"─".repeat(inner)}╮`)];
     if (props.header !== null) {
       head.push(row(theme.fg("muted", props.header.slice(0, column))));
+      head.push(row(""));
+    } else if (focused) {
+      head.push(row(theme.fg("accent", "panel focused") + theme.fg("muted", " · esc → editor")));
+      head.push(row(""));
+    } else {
+      // Without this the dock looks inert: there is no other sign that it takes keys.
+      head.push(row(theme.fg("muted", "alt+g focus")));
       head.push(row(""));
     }
 
@@ -151,7 +173,11 @@ export function createSidebar(props: SidebarProps): Component {
 
     handleInput(data: string): void {
       const command = resolvePanelCommand(data);
-      if (command === null) return;
+      if (command === null) {
+        // Not ours: hand printable text to the editor rather than swallowing it.
+        if (/^[\x20-\x7e]$/.test(data)) props.onUnhandledKey?.(data);
+        return;
+      }
       if (command === "close") {
         props.onClose();
         return;
@@ -160,6 +186,16 @@ export function createSidebar(props: SidebarProps): Component {
         helpVisible = !helpVisible;
         props.requestRender();
         return;
+      }
+      if (command === "fetch" || command === "pull" || command === "push" || command === "refresh") {
+        lastVerb = command === "refresh" ? "refresh" : command;
+        flashedAt = Date.now();
+        if (flashTimer !== undefined) clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+          flashTimer = undefined;
+          props.requestRender();
+        }, VERB_FLASH_MS);
+        flashTimer.unref?.();
       }
       props.onCommand(command);
     },

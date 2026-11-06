@@ -29,6 +29,8 @@ export type PanelRequest = {
   readonly onAction: (action: HitAction) => void;
   /** Hands the host a way to close the panel it opened (`alt+g` toggles). */
   readonly exposeClose: (close: () => void) => void;
+  /** Keys the panel does not use go to the editor instead of being dropped. */
+  readonly onUnhandledKey?: (data: string) => void;
 };
 
 export async function showPanel(ctx: ExtensionContext, request: PanelRequest): Promise<PanelHostResult> {
@@ -53,6 +55,7 @@ export async function showPanel(ctx: ExtensionContext, request: PanelRequest): P
         onClose: close,
         onCommand: request.onCommand,
         onAction: request.onAction,
+        onUnhandledKey: request.onUnhandledKey,
       });
       return {
         render: (width: number) => panel.render(width),
