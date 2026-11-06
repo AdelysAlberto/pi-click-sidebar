@@ -8,6 +8,8 @@ gate, commits and tags.
 
 ## [0.1.1] - 2026-11-06
 
+## [0.1.1] - 2026-11-06
+
 ### Fixed
 
 - `/sidebar mode` drew two lanes: the command re-mounts the surface, and a second mount wrapped the existing
