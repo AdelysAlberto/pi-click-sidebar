@@ -38,7 +38,11 @@
   },
   "scripts": {
     "test": "node --test \"src/**/*.test.ts\"",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "release:patch": "node scripts/release.ts patch",
+    "release:minor": "node scripts/release.ts minor",
+    "release:major": "node scripts/release.ts major",
+    "release:tag": "node scripts/release.ts tag"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.5.0",

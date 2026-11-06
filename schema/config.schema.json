@@ -1,10 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "pi-click-sidebar configuration",
-  "description": "Validation aid for <agent-dir>/pi-click-sidebar.json. The extension enforces the same rules at runtime (src/config.ts): a missing field keeps its default, an out-of-range number is clamped, and an unknown key is reported once and ignored. The file carries no $schema key until this repository publishes the schema at a stable URL.",
+  "description": "Validation aid for <agent-dir>/pi-click-sidebar.json. The extension enforces the same rules at runtime (src/config.ts): a missing field keeps its default, an out-of-range number is clamped, and an unknown key is reported once and ignored.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "description": "Published schema URL. Ignored by the extension's own validation.",
+      "type": "string"
+    },
     "mode": {
       "description": "auto follows the dock probe; off loads the extension and does nothing.",
       "enum": ["auto", "dock", "overlay", "rail", "off"],

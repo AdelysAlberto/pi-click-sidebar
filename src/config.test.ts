@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_CONFIG, describeConfig, loadConfig, parseConfig, resolveAgentDir } from "./config.ts";
+import {
+  CONFIG_SCHEMA_URL,
+  DEFAULT_CONFIG,
+  describeConfig,
+  loadConfig,
+  parseConfig,
+  resolveAgentDir,
+} from "./config.ts";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +15,12 @@ import { join } from "node:path";
 test("defaults survive an empty document", () => {
   const { config, warnings } = parseConfig({});
   assert.deepEqual(config, DEFAULT_CONFIG);
+  assert.deepEqual(warnings, []);
+});
+
+test("the published $schema is written and never reported as unknown", () => {
+  const { config, warnings } = parseConfig({ $schema: CONFIG_SCHEMA_URL, mode: "rail" });
+  assert.equal(config.mode, "rail");
   assert.deepEqual(warnings, []);
 });
 
@@ -65,7 +78,7 @@ test("a missing file is created with the defaults", () => {
     assert.deepEqual(load.config, DEFAULT_CONFIG);
     assert.deepEqual(load.warnings, []);
     const written: unknown = JSON.parse(readFileSync(load.path, "utf8"));
-    assert.deepEqual(written, DEFAULT_CONFIG);
+    assert.deepEqual(written, { $schema: CONFIG_SCHEMA_URL, ...DEFAULT_CONFIG });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

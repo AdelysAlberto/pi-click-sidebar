@@ -141,6 +141,18 @@ node --test "src/**/*.test.ts"    # 83 tests, no extra dependency
 
 The test runner takes a glob: on Node 24 `node --test src` tries to load the directory as a module.
 
+### Releasing
+
+```bash
+npm run release:tag      # tag the version already in package.json
+npm run release:patch    # or :minor / :major, which bump first
+git push origin main --follow-tags
+```
+
+The script refuses a dirty tree and any branch but `main`, runs the gate, moves `## [Unreleased]` in
+`CHANGELOG.md` into a dated heading, commits `chore(release): vX.Y.Z` and creates an annotated tag. It does
+not push unless you pass `--push`: that is the one step worth doing by hand.
+
 Layering is one direction, `host → data → view`: `extensions/` wires, `src/host/` knows Pi, `src/git/`
 spawns and parses, `src/view/` formats. A view never spawns a process, and only `src/host/dock.ts` touches
 the host layout root.

@@ -1,6 +1,10 @@
 # Changelog
 
-Every release gets a heading in the form `## [x.y.z]`, because Pi reads package changelogs.
+Every release gets a heading in the form `## [x.y.z]`, because Pi reads package changelogs. `npm run
+release:patch|minor|major` moves `## [Unreleased]` into a dated heading, bumps the version, runs the gate,
+commits and tags.
+
+## [Unreleased]
 
 ## [0.1.0]
 
@@ -51,4 +55,5 @@ First release.
   `env` to disable the prompt.
 - The changed-file list (`d`) and file-level detail are not in this release.
 
+[Unreleased]: https://github.com/AdelysAlberto/pi-click-sidebar/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/AdelysAlberto/pi-click-sidebar/releases/tag/v0.1.0

@@ -32,6 +32,13 @@ export type ConfigLoad = {
 
 export const CONFIG_FILE_NAME = "pi-click-sidebar.json";
 
+/**
+ * Published schema. Written into the file on first run and ignored on read, so
+ * an editor validates the file the extension itself is validating.
+ */
+export const CONFIG_SCHEMA_URL =
+  "https://raw.githubusercontent.com/AdelysAlberto/pi-click-sidebar/main/schema/config.schema.json";
+
 export const DEFAULT_CONFIG: Config = {
   mode: "auto",
   dockWidth: 34,
@@ -45,6 +52,7 @@ export const DEFAULT_CONFIG: Config = {
 
 const MODES: readonly Mode[] = ["auto", "dock", "overlay", "rail", "off"];
 const KNOWN_KEYS: readonly string[] = [
+  "$schema",
   "mode",
   "dockWidth",
   "dockMinTerminalWidth",
@@ -176,7 +184,8 @@ function writeDefaultFile(file: string, warnings: string[]): void {
   const temp = `${file}.tmp`;
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(temp, `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`, "utf8");
+    const document = { $schema: CONFIG_SCHEMA_URL, ...DEFAULT_CONFIG };
+    fs.writeFileSync(temp, `${JSON.stringify(document, null, 2)}\n`, "utf8");
     fs.renameSync(temp, file);
   } catch {
     warnings.push(`${CONFIG_FILE_NAME}: could not be created at ${file}`);
