@@ -1,35 +1,26 @@
 /**
  * The panel component: one anatomy, rendered by the dock lane and by the
  * overlay fallback. It never spawns a process and never decides anything; it
- * renders a `PanelData` and forwards the keys it owns.
+ * renders a `PanelData`, maps its own keys, and reports clicks as actions.
  *
  * Reading order is fixed by `docs/02-ux-spec.md` §2: Project, Changes, Branch
  * and actions, Result, Model. Nothing reorders under the cursor.
  */
-import type { Component } from "@earendil-works/pi-tui";
-import type { PanelCommand } from "./keymap.ts";
-import { keyMapLines, resolvePanelCommand } from "./keymap.ts";
+import type { Component, TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { hitTest, type HitAction, type HitMap } from "./hits.ts";
+import { keyMapLines, resolvePanelCommand, type PanelCommand } from "./keymap.ts";
 import {
-  ACTIONS,
-  DETACHED,
-  GIT_MISSING,
-  NOT_A_REPO,
-  OPERATION_IN_PROGRESS,
-  SECTION_BRANCH,
-  SECTION_CHANGES,
-  SECTION_MODEL,
-  SECTION_PROJECT,
-  STALE,
-  aheadBehind,
-  contextPercent,
-  deleted,
-  deletions,
-  fileCount,
-  insertions,
-  untracked,
-} from "./copy.ts";
-import { displayPath, middleEllipsis, padToWidth, rightEllipsis, spread } from "./text.ts";
+  actionsSection,
+  branchSection,
+  changesSection,
+  modelSection,
+  projectSection,
+  resultSection,
+  type Section,
+  type SectionContext,
+} from "./panel-sections.ts";
+import { padToWidth } from "./text.ts";
 
 export type ProjectSummary = { readonly name: string; readonly path: string };
 
@@ -58,6 +49,8 @@ export type ModelSummary = {
 
 export type ResultKind = "running" | "ok" | "fail";
 
+export type RepositoryState = "ok" | "none" | "git-missing";
+
 export type PanelData = {
   readonly project: ProjectSummary | null;
   readonly changes: ChangeSummary | null;
@@ -68,8 +61,6 @@ export type PanelData = {
   /** `none` renders the project plus one dim line; there is nothing else to show. */
   readonly repository: RepositoryState;
 };
-
-export type RepositoryState = "ok" | "none" | "git-missing";
 
 export type SidebarProps = {
   /** Read on every render: the dock refreshes in place, it is not rebuilt. */
@@ -82,21 +73,18 @@ export type SidebarProps = {
   readonly onClose: () => void;
   /** Commands the component does not own: running git verbs is the host's job. */
   readonly onCommand: (command: PanelCommand) => void;
+  /** Mouse targets, resolved by column and row against what was drawn. */
+  readonly onAction?: (action: HitAction) => void;
 };
 
 const MIN_WIDTH = 24;
-const BRANCH_MAX = 26;
-
-function heading(theme: Theme, label: string): string {
-  return theme.fg("accent", theme.bold(label));
-}
+/** One frame column plus one column of padding on each side. */
+export const CONTENT_OFFSET = 2;
 
 export function createSidebar(props: SidebarProps): Component {
   const theme = props.theme;
   let helpVisible = false;
-  let filesVisible = false;
-
-  const frame = (segment: string): string => theme.fg("border", segment);
+  let hits: HitMap = { regions: [], width: 0 };
 
   const render = (requested: number): string[] => {
     const width = Math.max(MIN_WIDTH, Math.floor(requested));
@@ -104,49 +92,61 @@ export function createSidebar(props: SidebarProps): Component {
     const column = inner - 2;
     const data = props.read();
 
+    const frame = (segment: string): string => theme.fg("border", segment);
     const row = (styled: string): string => `${frame("│")} ${padToWidth(styled, column)} ${frame("│")}`;
-    const blank = (): string => row("");
 
-    const project: string[] = [row(heading(theme, SECTION_PROJECT))];
-    if (data.project === null) {
-      project.push(row(theme.fg("dim", NOT_A_REPO)));
-    } else {
-      project.push(row(theme.bold(rightEllipsis(data.project.name, column))));
-      project.push(row(theme.fg("dim", middleEllipsis(displayPath(data.project.path), column))));
-    }
+    const context: SectionContext = {
+      data,
+      theme,
+      column,
+      row,
+      helpLines: helpVisible ? keyMapLines() : null,
+    };
 
-    const changes: string[] =
-      data.repository === "ok" ? renderChanges(data, row, column, theme) : [row(theme.fg("dim", reasonLine(data)))];
-    const branch: string[] =
-      data.repository === "ok" && data.branch !== null ? renderBranch(data, row, column, theme) : [];
-
-    const resultStyle = stylish(theme, data.result?.kind);
-    const result: string[] = helpVisible
-      ? keyMapLines().map((line) => row(theme.fg("muted", rightEllipsis(line, column))))
-      : [row(data.result === null ? "" : resultStyle(data.result.line))];
-
-    const model: string[] = [
-      row(heading(theme, SECTION_MODEL)),
-      row(theme.fg("text", rightEllipsis(`${data.model.id} · ${data.model.thinking}`, column))),
-      row(theme.fg("dim", contextPercent(data.model.contextPercent))),
-    ];
-
-    // One blank line between sections, never at the top or bottom of the frame.
-    const actions = data.repository === "ok" ? renderActions(row, theme) : [];
-    const sections = [project, changes, branch, actions, result, model].filter((section) => section.length > 0);
-    const body = sections.flatMap((section, index) => (index === 0 ? section : [blank(), ...section]));
+    const sections: Section[] = [
+      projectSection(context),
+      changesSection(context),
+      branchSection(context),
+      actionsSection(context),
+      resultSection(context),
+      modelSection(context),
+    ].filter((section) => section.lines.length > 0);
 
     const head: string[] = [frame(`╭${"─".repeat(inner)}╮`)];
     if (props.header !== null) {
-      head.push(row(theme.fg("muted", rightEllipsis(props.header, column))), blank());
+      head.push(row(theme.fg("muted", props.header.slice(0, column))));
+      head.push(row(""));
     }
 
+    // Exactly one blank line between sections, never at the top or bottom.
+    const body: string[] = [];
+    const regions: HitMap["regions"][number][] = [];
+    let rowIndex = head.length;
+    sections.forEach((section, index) => {
+      if (index > 0) {
+        body.push(row(""));
+        rowIndex += 1;
+      }
+      for (const line of section.lines) body.push(line);
+      for (const hit of section.hits) {
+        regions.push({
+          row: rowIndex + hit.rowOffset,
+          start: CONTENT_OFFSET + hit.start,
+          end: CONTENT_OFFSET + hit.start + Math.max(0, hit.length - 1),
+          action: hit.action,
+        });
+      }
+      rowIndex += section.lines.length;
+    });
+
+    hits = { regions, width };
     return [...head, ...body, frame(`╰${"─".repeat(inner)}╯`)];
   };
 
   return {
     render,
     invalidate: () => {},
+
     handleInput(data: string): void {
       const command = resolvePanelCommand(data);
       if (command === null) return;
@@ -159,85 +159,15 @@ export function createSidebar(props: SidebarProps): Component {
         props.requestRender();
         return;
       }
-      if (command === "toggle-files") {
-        filesVisible = !filesVisible;
-        props.requestRender();
-        return;
-      }
       props.onCommand(command);
     },
+
+    handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+      if (event.type !== "press" && event.type !== "click") return undefined;
+      const action = hitTest(hits, event.x, event.y);
+      if (action === null) return undefined;
+      props.onAction?.(action);
+      return { handled: true, focus: true };
+    },
   };
-}
-
-function reasonLine(data: PanelData): string {
-  return data.repository === "git-missing" ? GIT_MISSING : NOT_A_REPO;
-}
-
-function stylish(theme: Theme, kind: ResultKind | undefined): (text: string) => string {
-  if (kind === "ok") return (text) => theme.fg("success", text);
-  if (kind === "fail") return (text) => theme.fg("error", text);
-  if (kind === "running") return (text) => theme.fg("accent", text);
-  return (text) => theme.fg("muted", text);
-}
-
-function renderChanges(
-  data: PanelData,
-  row: (styled: string) => string,
-  column: number,
-  theme: Theme,
-): string[] {
-  const changes = data.changes;
-  if (changes === null) return [row(spread(heading(theme, SECTION_CHANGES), theme.fg("dim", "—"), column))];
-  const numberStyle = data.stale ? (text: string) => theme.fg("dim", text) : (text: string) => theme.fg("text", text);
-  const dirtyStyle = data.stale ? (text: string) => theme.fg("dim", text) : (text: string) => theme.fg("warning", text);
-  return [
-    row(spread(heading(theme, SECTION_CHANGES), theme.fg("muted", fileCount(changes.files)), column)),
-    row(
-      [
-        numberStyle(insertions(changes.insertions)),
-        numberStyle(deletions(changes.deletions)),
-        " ",
-        dirtyStyle(untracked(changes.untracked)),
-        dirtyStyle(deleted(changes.deleted)),
-      ].join(" "),
-    ),
-  ];
-}
-
-function renderBranch(
-  data: PanelData,
-  row: (styled: string) => string,
-  column: number,
-  theme: Theme,
-): string[] {
-  const branch = data.branch;
-  if (branch === null) return [];
-  const rows = [row(heading(theme, SECTION_BRANCH))];
-  const label = branch.detached ? `${DETACHED} ${branch.name}` : branch.name;
-  const limit = Math.min(column, BRANCH_MAX);
-  rows.push(row(branch.detached ? theme.fg("warning", rightEllipsis(label, limit)) : theme.bold(rightEllipsis(label, limit))));
-
-  const parts: string[] = [];
-  if (branch.upstream !== null && !branch.detached) parts.push(aheadBehind(branch.ahead, branch.behind));
-  if (data.stale) parts.push(STALE);
-  rows.push(row(theme.fg("dim", parts.length > 0 ? parts.join(" · ") : "no upstream")));
-  if (branch.operation !== null) {
-    rows.push(row(theme.fg("warning", OPERATION_IN_PROGRESS.replace("{op}", branch.operation))));
-  }
-  return rows;
-}
-
-function renderActions(row: (styled: string) => string, theme: Theme): string[] {
-  const cell = (index: number): string => {
-    const action = ACTIONS[index];
-    if (action === undefined) return "";
-    return `${theme.fg("muted", action.key)} ${theme.fg("text", action.verb)}`;
-  };
-  const perRow = 3;
-  const rows: string[] = [];
-  for (let start = 0; start < ACTIONS.length; start += perRow) {
-    const cells = [cell(start), cell(start + 1), cell(start + 2)].filter((entry) => entry.length > 0);
-    rows.push(row(cells.join("   ")));
-  }
-  return rows;
 }

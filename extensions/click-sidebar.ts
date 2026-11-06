@@ -2,13 +2,22 @@
  * Extension entry point: config, timer, commands, and the panel wiring. No
  * rendering and no git parsing live here; see `docs/03-architecture.md` §1.
  */
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { describeConfig, loadConfig, resolveAgentDir, type ConfigLoad } from "../src/config.ts";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import {
+  DEFAULT_CONFIG,
+  loadConfig,
+  resolveAgentDir,
+  type Config,
+  type ConfigLoad,
+  type Mode,
+} from "../src/config.ts";
+import { createCommandHandler } from "../src/host/commands.ts";
 import { createGitRun } from "../src/git/exec.ts";
 import { readSnapshot } from "../src/git/snapshot.ts";
 import { createPresenter } from "../src/host/present.ts";
 import { createRefresher, type Refresher } from "../src/host/refresh.ts";
 import { describeUnavailable, registerToggle } from "../src/host/keymap.ts";
+import type { HitAction } from "../src/view/hits.ts";
 import type { PanelCommand } from "../src/view/keymap.ts";
 import { NO_MODEL } from "../src/view/copy.ts";
 import { buildPanelData, type SessionInfo } from "../src/view/model.ts";
@@ -22,6 +31,9 @@ export default function clickSidebar(pi: ExtensionAPI): void {
   let cached: ConfigLoad | undefined;
   let refresher: Refresher | undefined;
   let activeCtx: ExtensionContext | undefined;
+  let lastTheme: Theme | undefined;
+  /** `/sidebar mode` forces a surface for this session; the file stays the SSOT. */
+  let modeOverride: Mode | undefined;
   let session: SessionInfo = { cwd: ".", modelId: NO_MODEL, thinking: "off", contextPercent: null };
   let stale = false;
 
@@ -38,11 +50,43 @@ export default function clickSidebar(pi: ExtensionAPI): void {
     if (unavailable !== null) ctx.ui.notify(`click-sidebar: ${unavailable}`, "info");
   };
 
+  /** A click on a segment: the same commands the keyboard reaches. */
+  const runAction = (action: HitAction): void => {
+    const ctx = activeCtx;
+    if (ctx === undefined) return;
+    switch (action.kind) {
+      case "verb":
+        runCommand(action.verb === "refresh" ? "refresh" : (action.verb as PanelCommand));
+        return;
+      case "branch":
+        ctx.ui.notify("click-sidebar: switching branches arrives in slice 6", "info");
+        return;
+      case "changes":
+        ctx.ui.notify("click-sidebar: the changed-file list arrives in a later slice", "info");
+        return;
+      case "project":
+        ctx.ui.notify(`click-sidebar: ${session.cwd}`, "info");
+        return;
+    }
+  };
+
   const presenter = createPresenter({
     onCommand: runCommand,
+    onAction: runAction,
     onRailOpen: () => {
       const ctx = activeCtx;
       if (ctx !== undefined) void openPanel(ctx);
+    },
+    onBlur: () => presenter.blurDock(),
+    config: (): Config => {
+      const base = cached?.config ?? DEFAULT_CONFIG;
+      return modeOverride === undefined ? base : { ...base, mode: modeOverride };
+    },
+    getTheme: () => {
+      const ctx = activeCtx;
+      if (ctx !== undefined) return ctx.ui.theme;
+      if (lastTheme !== undefined) return lastTheme;
+      throw new Error("click-sidebar: no theme available");
     },
   });
 
@@ -61,6 +105,8 @@ export default function clickSidebar(pi: ExtensionAPI): void {
     thinking: ctx.thinkingLevel ?? "off",
     contextPercent: ctx.getContextUsage()?.percent ?? null,
   });
+
+  const currentData = (): PanelData => refresher?.current() ?? initialData();
 
   const read = async (ctx: ExtensionContext, includeShortstat: boolean): Promise<PanelData> => {
     const settings = config(ctx).config;
@@ -87,12 +133,13 @@ export default function clickSidebar(pi: ExtensionAPI): void {
     activeCtx = ctx;
     session = sessionInfo(ctx);
     await refresher?.refreshNow();
-    await presenter.show(ctx, () => refresher?.current() ?? initialData());
+    await presenter.show(ctx, currentData);
   };
 
   const start = (ctx: ExtensionContext): void => {
     const settings = config(ctx).config;
     activeCtx = ctx;
+    lastTheme = ctx.ui.theme;
     session = sessionInfo(ctx);
     stale = false;
     refresher?.dispose();
@@ -101,15 +148,38 @@ export default function clickSidebar(pi: ExtensionAPI): void {
       initial: initialData(),
       intervalMs: settings.refreshIntervalMs,
       shortstatEveryNTicks: settings.shortstatEveryNTicks,
-      onUpdate: () => presenter.repaint(),
+      onUpdate: () => {
+        presenter.reconcile(currentData);
+        presenter.repaint();
+      },
     });
     refresher.start();
-    presenter.mountRail(ctx, () => refresher?.current() ?? initialData());
+    presenter.mountRail(ctx, currentData);
+    mountLane(ctx);
+  };
+
+  /**
+   * The dock needs the live TUI object, and the documented way to receive it is
+   * a widget factory. The rail's factory is the first one available, so the lane
+   * is mounted from the widget that already owns a render.
+   */
+  const mountLane = (ctx: ExtensionContext): void => {
+    ctx.ui.setWidget(
+      "click-sidebar-probe",
+      (tui) => {
+        presenter.mountDock(tui, currentData);
+        // The probe widget draws nothing; it exists to hand over the TUI.
+        return { render: () => [], invalidate: () => {} };
+      },
+      { placement: "aboveEditor" },
+    );
+    ctx.ui.setWidget("click-sidebar-probe", undefined);
   };
 
   /** Refresh on the events that change what the panel shows, never a write. */
   const touch = (ctx: ExtensionContext): void => {
     activeCtx = ctx;
+    lastTheme = ctx.ui.theme;
     session = sessionInfo(ctx);
     refresher?.markDirty();
   };
@@ -121,6 +191,7 @@ export default function clickSidebar(pi: ExtensionAPI): void {
   pi.on("model_select", async (_event, ctx) => touch(ctx));
   pi.on("session_compact", async (_event, ctx) => touch(ctx));
   pi.on("session_shutdown", async (_event, ctx) => {
+    presenter.release();
     presenter.unmountRail(ctx);
     refresher?.dispose();
     refresher = undefined;
@@ -131,27 +202,27 @@ export default function clickSidebar(pi: ExtensionAPI): void {
     isOpen: () => presenter.isOpen(),
     open: (ctx) => openPanel(ctx),
     close: () => presenter.closeOpen(),
+    hasDock: () => presenter.hasDock() && presenter.currentSurface() === "dock",
+    toggleDockFocus: () => presenter.toggleDockFocus(),
+  });
+
+  const command = createCommandHandler({
+    load: config,
+    presenter,
+    openPanel,
+    refreshSurfaces: (ctx) => {
+      mountLane(ctx);
+      presenter.reconcile(currentData);
+      presenter.repaint();
+    },
+    setMode: (mode) => {
+      modeOverride = mode;
+    },
+    currentMode: () => modeOverride ?? cached?.config.mode ?? DEFAULT_CONFIG.mode,
   });
 
   pi.registerCommand(COMMAND, {
     description: "Open the click sidebar panel, or run `/sidebar config`",
-    handler: async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
-      const settings = config(ctx).config;
-      const subcommand = args.trim().split(/\s+/)[0] ?? "";
-
-      if (subcommand === "config") {
-        ctx.ui.notify(describeConfig(config(ctx)), "info");
-        return;
-      }
-      if (subcommand !== "") {
-        ctx.ui.notify("click-sidebar: usage: /sidebar [config]", "warning");
-        return;
-      }
-      if (settings.mode === "off") {
-        ctx.ui.notify("click-sidebar: mode is off, see /sidebar config", "info");
-        return;
-      }
-      await openPanel(ctx);
-    },
+    handler: async (args: string, ctx: ExtensionCommandContext): Promise<void> => command(args, ctx),
   });
 }

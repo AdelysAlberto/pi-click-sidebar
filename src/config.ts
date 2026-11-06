@@ -228,3 +228,8 @@ export function describeConfig(load: ConfigLoad): string {
     `accentOverride ${config.accentOverride ?? "none"} · timeouts ${config.timeouts.read}/${config.timeouts.network}/${config.timeouts.tree}ms`,
   ].join("\n");
 }
+
+/** `/sidebar mode <name>`: validates the argument against the same list. */
+export function parseModeArgument(value: string): Mode | null {
+  return isMode(value) ? value : null;
+}

@@ -68,16 +68,20 @@ pi-click-sidebar/                    (repository root = package root)
     │   ├── copy.ts            ~73  every user-visible string
     │   ├── text.ts            ~70  visibleWidth helpers: ellipsis, padding, spread, counts
     │   ├── keymap.ts          ~57  key → panel command (pure)
+    │   ├── hits.ts            ~45  click regions and hit test (pure)
+    │   ├── surface.ts         ~52  which surface is in effect (pure)
+    │   ├── panel-sections.ts ~211  the six sections, their rows and click ranges
     │   ├── rail.ts           ~145  one-line widget for regular mode
-    │   ├── sidebar.ts        ~211  dock/overlay component
+    │   ├── sidebar.ts        ~173  the panel component: frame, rows, keys, clicks
     │   ├── rail.ts            ~80  one-line widget (regular mode)
     │   └── branch-modal.ts   ~150  select + input overlay
     └── host/
-        ├── dock.ts           ~120  probe, wrap, reconcile
+        ├── dock.ts           ~106  probe, HStack wrap, reconcile, restore
+        ├── commands.ts        ~56  `/sidebar config` and `/sidebar mode`
         ├── present.ts         ~25  pick the host: dock, else overlay
         ├── overlay.ts         ~43  show/hide the panel as an overlay
         ├── refresh.ts        ~111  one timer, shortstat throttle, backoff
-        ├── keymap.ts          ~49  `alt+g` toggle, unavailable-verb copy
+        ├── keymap.ts          ~55  `alt+g` toggle (focus when the lane is up)
         └── keymap.ts          ~50  focus and verb dispatch
 ```
 
@@ -253,6 +257,8 @@ slice gates cover them by hand).
 | `git/refs.test.ts` | option-like and empty names are rejected before any spawn |
 | `view/rail.test.ts` | the truncation ladder at 160/80/30 columns; the path keeps its last segment; no width produces an over-wide line |
 | `view/keymap.test.ts` | every documented key resolves; unknown input returns `null` so the editor keeps it |
+| `view/surface.test.ts` | the surface decision for every mode, width and probe outcome, including each fallback |
+| `view/hits.test.ts` | a click inside a region reports its action; borders, padding, the wrong row and stale rows do not |
 | `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults; first-run creation; `PI_CODING_AGENT_DIR` resolution |
 
 ## 10. Package manifest

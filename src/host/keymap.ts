@@ -9,10 +9,14 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { TOGGLE_SHORTCUT, type PanelCommand } from "../view/keymap.ts";
 
 export type ToggleHandlers = {
-  /** True when a panel is already open. */
+  /** True when the overlay panel is already open. */
   readonly isOpen: () => boolean;
   readonly open: (ctx: ExtensionContext) => Promise<void>;
   readonly close: () => void;
+  /** True when the lane is the surface in effect: then `alt+g` moves focus instead. */
+  readonly hasDock: () => boolean;
+  /** Focus the lane, or hand focus back when it already has it. */
+  readonly toggleDockFocus: () => void;
 };
 
 /** Registers `alt+g`: open when closed, close when open. Never both. */
@@ -20,6 +24,11 @@ export function registerToggle(pi: ExtensionAPI, handlers: ToggleHandlers): void
   pi.registerShortcut(TOGGLE_SHORTCUT, {
     description: "Toggle the click sidebar panel",
     handler: async (ctx) => {
+      // With a lane on screen the panel is already there: the toggle is focus.
+      if (handlers.hasDock()) {
+        handlers.toggleDockFocus();
+        return;
+      }
       if (handlers.isOpen()) {
         handlers.close();
         return;
@@ -41,6 +50,8 @@ export function describeUnavailable(command: PanelCommand): string | null {
       return `${command} arrives in slice 6`;
     case "run":
       return "nothing selected yet";
+    case "toggle-files":
+      return "the changed-file list arrives in a later slice";
     case "cursor-up":
     case "cursor-down":
       return null;

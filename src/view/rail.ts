@@ -77,8 +77,8 @@ export function railLine(pieces: readonly RailPiece[], width: number): string {
 export type RailProps = {
   readonly read: () => PanelData;
   readonly theme: Theme;
-  /** True only in regular mode: the dock owns fullscreen. */
-  readonly visible: () => boolean;
+  /** Whether the rail is the surface in effect at this width. */
+  readonly visible: (columns: number) => boolean;
   readonly onOpen: () => void;
 };
 
@@ -127,7 +127,7 @@ export function createRail(props: RailProps): Component {
 
   return {
     render(width: number): string[] {
-      if (!props.visible()) return [];
+      if (!props.visible(width)) return [];
       const available = Math.max(1, width - 2);
       const visible = fitRail(pieces(props.read()), available);
       if (visible.length === 0) return [""];

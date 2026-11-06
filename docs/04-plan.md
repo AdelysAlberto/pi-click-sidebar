@@ -174,6 +174,24 @@ PI_TUI_WRITE_LOG=/tmp/pi-click-sidebar.log pi -e .
 grep -c . /tmp/pi-click-sidebar.log        # frame evidence for the lane boundary
 ```
 
+**Result (2026-11-06): done.** Captured at 160×45 with `dockWidth` 34: the transcript box ends at column
+125 and the lane occupies 126–159, one panel frame, one top and one bottom row. `/settings` and `/model`
+opened and closed with the lane intact. Resizing to 80×30 removed the lane and the rail appeared; back to
+160×45 restored the lane at 126. Clicks land on the segment the coordinate names: `f fetch` reported
+"fetch arrives in slice 5", the `CHANGES` label reported the file list, the branch name reported the modal,
+and the same click worked after a resize to 120 columns with the lane at 86 (x=89 is `f fetch` there).
+`/reload` left exactly one lane at column 126, which is the observable proof that `session_shutdown`
+restored the host root instead of orphaning a wrapper: a stale wrapper would nest and narrow the host twice.
+
+The runtime `tuiMode` switch was exercised both ways through `/settings`. The host switched, the extension
+kept running, and no exception reached the session; regular mode showed the rail and fullscreen brought the
+dock back. Reading that switch from the byte stream is noisy because regular mode reprints the transcript,
+so the operator's live confirmation is still worth having for this one criterion.
+
+Deviations recorded: the lane width is `config.dockWidth` capped by the terminal instead of the percentage
+in `02-ux-spec.md` §3, and the command handler moved to `host/commands.ts` when the entry point reached the
+250-line ceiling.
+
 ## S5 — Write actions
 
 `git/actions.ts`: `fetch`, `pull`, `push`, guard chain, result line, confirm dialogs for the two

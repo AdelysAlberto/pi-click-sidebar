@@ -7,6 +7,7 @@
  * right columns while it is open and says so in its own header.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HitAction } from "../view/hits.ts";
 import type { PanelCommand } from "../view/keymap.ts";
 import type { PanelData } from "../view/sidebar.ts";
 import { createSidebar } from "../view/sidebar.ts";
@@ -22,6 +23,8 @@ export type PanelRequest = {
   readonly attach: (listener: () => void) => () => void;
   /** Verbs and navigation: the host runs them, the component only names them. */
   readonly onCommand: (command: PanelCommand) => void;
+  /** A click on a segment: the host decides what it means. */
+  readonly onAction: (action: HitAction) => void;
   /** Hands the host a way to close the panel it opened (`alt+g` toggles). */
   readonly exposeClose: (close: () => void) => void;
 };
@@ -47,6 +50,7 @@ export async function showPanel(ctx: ExtensionContext, request: PanelRequest): P
         requestRender: () => tui.requestRender(),
         onClose: close,
         onCommand: request.onCommand,
+        onAction: request.onAction,
       });
       return {
         render: (width: number) => panel.render(width),

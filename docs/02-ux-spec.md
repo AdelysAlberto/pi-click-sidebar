@@ -101,9 +101,14 @@ mostly-empty labels; on 90 columns it would be 20 and unusable. The content is f
 (branch names, counts, ids), so the lane is sized by content:
 
 ```text
-laneWidth = clamp(28, round(0.22 * columns), 44)   // computed at wrap time
-visible   = columns >= 96                          // below that, the rail/overlay takes over
+laneWidth = min(dockWidth, max(24, columns - 24))   // dockWidth is the config knob, default 34
+visible   = columns >= dockMinTerminalWidth         // default 96; below that the rail takes over
 ```
+
+The first draft of this section computed the lane from a percentage of the terminal
+(`clamp(28, 0.22 * columns, 44)`). That and `dockWidth` were two answers to one question, so the
+percentage is gone: the config value decides, and the terminal only caps it to keep the transcript at
+least 24 columns wide.
 
 | Terminal width | Dock | Behaviour |
 |---|---|---|

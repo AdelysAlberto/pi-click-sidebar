@@ -1,8 +1,14 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
+import type { Config } from "../config.ts";
+import type { HitAction } from "../view/hits.ts";
 import type { PanelCommand } from "../view/keymap.ts";
 import type { PanelData } from "../view/sidebar.ts";
+import { createSidebar } from "../view/sidebar.ts";
 import { createRail } from "../view/rail.ts";
+import { selectSurface, type Surface } from "../view/surface.ts";
 import { OVERLAY_HEADER } from "../view/copy.ts";
+import { mountDock, probeDockSupport, type DockHandle } from "./dock.ts";
 import { OVERLAY_WIDTH, showPanel } from "./overlay.ts";
 
 export { OVERLAY_WIDTH };
@@ -10,39 +16,114 @@ export { OVERLAY_WIDTH };
 const RAIL_KEY = "click-sidebar-rail";
 
 export type PresenterOptions = {
-  /** Runs a verb the panel asked for. Slice 5 implements them; today: refresh only. */
   readonly onCommand: (command: PanelCommand) => void;
-  /** A click on any rail segment. */
+  readonly onAction: (action: HitAction) => void;
   readonly onRailOpen: () => void;
+  /** Leaving the panel with `esc` returns focus to whatever had it before. */
+  readonly onBlur: () => void;
+  /** Config as it is right now, so `/reload` is honest. */
+  readonly config: () => Config;
+  /** The live theme: compared by identity so a theme change rebuilds the lane. */
+  readonly getTheme: () => Theme;
 };
 
 export type PanelPresenter = {
   show(ctx: ExtensionContext, read: () => PanelData): Promise<void>;
-  /** Installs the one-line widget; idempotent per session. */
+  /** Installs the rail widget; idempotent per session. */
   mountRail(ctx: ExtensionContext, read: () => PanelData): void;
   unmountRail(ctx: ExtensionContext): void;
-  /** Tells every mounted surface to repaint. Slice 4 adds the dock lane here. */
+  /** Wraps the host layout root when the dock is usable. False when it is not. */
+  mountDock(tui: unknown, read: () => PanelData): boolean;
+  /** Re-applies the wrapper if the host re-asserted its own root. */
+  reconcile(read: () => PanelData): void;
+  /** The surface in effect for a given width. */
+  surface(columns: number): Surface;
+  /** The surface in effect right now, from the terminal's own width. */
+  currentSurface(): Surface;
+  /** Whether a lane is wrapped into the layout root. */
+  hasDock(): boolean;
+  /** Focuses the lane, remembering who had focus; `alt+g` when it is already focused leaves. */
+  toggleDockFocus(): void;
+  /** Hands focus back to whoever had it before the lane took it. */
+  blurDock(): void;
   repaint(): void;
   isOpen(): boolean;
-  /** Closes the panel if one is open; used by the `alt+g` toggle. */
   closeOpen(): void;
+  /** Puts the host layout root back. Safe to call twice. */
+  release(): void;
 };
 
 /**
- * The only module that decides *where* the panel appears. Slice 4 inserts the
- * dock lane in front of the overlay; regular mode always lands on the rail.
+ * The only module that decides *where* the panel appears. Every surface renders
+ * the same component; what differs is who owns the frame.
  */
 export function createPresenter(options: PresenterOptions): PanelPresenter {
   const listeners = new Set<() => void>();
   let closeCurrent: (() => void) | undefined;
+  let dock: DockHandle | null = null;
+  let laneTheme: Theme | undefined;
+  let laneComponent: Component | undefined;
+  let previousFocus: Component | null = null;
+  let tuiHost: unknown;
+  let tuiMode = "fullscreen";
+
+  type FocusHost = {
+    setFocus?: (component: Component | null) => void;
+    getFocusedComponent?: () => Component | null;
+  };
+
+  const repaint = (): void => {
+    for (const listener of listeners) listener();
+  };
+
+  const lane = (read: () => PanelData, theme: Theme): Component =>
+    createSidebar({
+      read,
+      theme,
+      header: null,
+      requestRender: repaint,
+      onClose: options.onBlur,
+      onCommand: options.onCommand,
+      onAction: options.onAction,
+    });
+
+  const dockSupport = (): boolean => probeDockSupport(tuiHost).supported;
+
+  const surface = (columns: number): Surface =>
+    selectSurface({
+      configured: options.config().mode,
+      dockSupported: dock !== null && dockSupport(),
+      tuiMode,
+      columns,
+      dockMinTerminalWidth: options.config().dockMinTerminalWidth,
+    });
 
   return {
-    repaint(): void {
-      for (const listener of listeners) listener();
+    repaint,
+    surface,
+    currentSurface: () => surface(process.stdout.columns > 0 ? process.stdout.columns : 80),
+    hasDock: () => dock !== null,
+
+    toggleDockFocus(): void {
+      const host = tuiHost as FocusHost | undefined;
+      if (host?.getFocusedComponent === undefined || host.setFocus === undefined) return;
+      if (laneComponent !== undefined && host.getFocusedComponent() === laneComponent) {
+        this.blurDock();
+        return;
+      }
+      previousFocus = host.getFocusedComponent() ?? null;
+      if (laneComponent !== undefined) host.setFocus(laneComponent);
+    },
+
+    blurDock(): void {
+      const host = tuiHost as FocusHost | undefined;
+      if (host?.setFocus === undefined || laneComponent === undefined) return;
+      if (host.getFocusedComponent?.() !== laneComponent) return;
+      host.setFocus(previousFocus);
+      previousFocus = null;
     },
 
     isOpen: () => closeCurrent !== undefined,
-
     closeOpen(): void {
       closeCurrent?.();
     },
@@ -50,10 +131,16 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
     mountRail(ctx: ExtensionContext, read: () => PanelData): void {
       ctx.ui.setWidget(
         RAIL_KEY,
-        (tui, theme) => {
+        (tui, widgetTheme) => {
           listeners.add(() => tui.requestRender());
-          // The rail owns regular mode; `tui.mode` follows the live renderer.
-          return createRail({ read, theme, visible: () => tui.mode === "regular", onOpen: options.onRailOpen });
+          tuiMode = tui.mode;
+          tuiHost = tui;
+          return createRail({
+            read,
+            theme: widgetTheme,
+            visible: (columns) => surface(columns) === "rail",
+            onOpen: options.onRailOpen,
+          });
         },
         { placement: "aboveEditor" },
       );
@@ -63,6 +150,34 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
       ctx.ui.setWidget(RAIL_KEY, undefined);
     },
 
+    mountDock(tui: unknown, read: () => PanelData): boolean {
+      tuiHost = tui;
+      const theme = options.getTheme();
+      const handle = mountDock(tui, {
+        laneWidth: options.config().dockWidth,
+        minTerminalWidth: options.config().dockMinTerminalWidth,
+        lane: lane(read, theme),
+      });
+      if (handle === null) return false;
+      dock = handle;
+      laneTheme = theme;
+      laneComponent = lane(read, theme);
+      return true;
+    },
+
+    reconcile(read: () => PanelData): void {
+      if (dock === null) return;
+      const theme = options.getTheme();
+      if (theme !== laneTheme) {
+        // A theme change is a new component: the lane is not styled dynamically.
+        dock.restore();
+        dock = null;
+        this.mountDock(tuiHost, read);
+        return;
+      }
+      dock.reconcile();
+    },
+
     async show(ctx: ExtensionContext, read: () => PanelData): Promise<void> {
       let result: Awaited<ReturnType<typeof showPanel>>;
       try {
@@ -70,6 +185,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
           read,
           header: OVERLAY_HEADER,
           onCommand: options.onCommand,
+          onAction: options.onAction,
           exposeClose: (close) => {
             closeCurrent = () => {
               closeCurrent = undefined;
@@ -87,6 +203,11 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
       if (result === "unsupported") {
         ctx.ui.notify("click-sidebar: the panel needs the interactive TUI", "warning");
       }
+    },
+
+    release(): void {
+      dock?.restore();
+      dock = null;
     },
   };
 }
