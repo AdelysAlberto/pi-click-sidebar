@@ -57,12 +57,14 @@ pi-click-sidebar/                    (repository root = package root)
     ├── config.test.ts         ~99  defaults, clamping, corruption, first-run creation
     ├── result.ts              ~50  Result helpers
     ├── git/
-    │   ├── exec.ts            ~70  runGit(): argv, timeout, killed→timeout, code
-    │   ├── status.ts         ~140  porcelain-v2 parser (pure) + repo probe
-    │   ├── refs.ts            ~70  branch list, name validation, existence
+    │   ├── exec.ts            ~57  runGit(): argv, timeout, killed→timeout, code
+    │   ├── status.ts         ~231  porcelain-v2 parser + totals + shortstat (pure)
+    │   ├── repo.ts            ~52  toplevel probe, operation markers, short oid
+    │   ├── snapshot.ts        ~68  one read of the tree: probe + status + deltas
+    │   ├── refs.ts            ~77  branch list, name validation, existence
     │   └── actions.ts        ~150  fetch/pull/push/switch/create + guards
     ├── view/
-    │   ├── model.ts          ~120  status + session → ViewModel (pure)
+    │   ├── model.ts           ~85  snapshot + session → PanelData (pure)
     │   ├── copy.ts            ~73  every user-visible string
     │   ├── text.ts            ~52  visibleWidth helpers: ellipsis, padding, spread
     │   ├── sidebar.ts        ~211  dock/overlay component
@@ -72,7 +74,7 @@ pi-click-sidebar/                    (repository root = package root)
         ├── dock.ts           ~120  probe, wrap, reconcile
         ├── present.ts         ~25  pick the host: dock, else overlay
         ├── overlay.ts         ~43  show/hide the panel as an overlay
-        ├── refresh.ts         ~90  timer, backoff, event wiring
+        ├── refresh.ts        ~110  one timer, shortstat throttle, backoff
         └── keymap.ts          ~50  focus and verb dispatch
 ```
 
@@ -173,7 +175,7 @@ clear the timer; `dispose()` is idempotent.
   "mode": "auto",
   "dockWidth": 34,
   "dockMinTerminalWidth": 96,
-  "refreshIntervalMs": 3000,
+  "refreshIntervalMs": 6000,
   "shortstatEveryNTicks": 3,
   "showFileList": false,
   "accentOverride": null,
@@ -186,7 +188,7 @@ clear the timer; `dispose()` is idempotent.
 | `mode` | `"auto" \| "dock" \| "overlay" \| "rail" \| "off"` | `"auto"` | `auto` follows the probe; `off` loads the extension and does nothing |
 | `dockWidth` | 24–48 | `34` | Fixed lane width in columns |
 | `dockMinTerminalWidth` | 80–200 | `96` | Below this the dock hides and the rail takes over |
-| `refreshIntervalMs` | 1000–30000 | `3000` | Tick period |
+| `refreshIntervalMs` | 1000–30000 | `6000` | Tick period (doubled after the Slice 2 measurement, §5) |
 | `shortstatEveryNTicks` | 1–10 | `3` | Throttle for `diff --shortstat` |
 | `showFileList` | boolean | `false` | Start with the changed-file section expanded |
 | `accentOverride` | `null \| "#rrggbb"` | `null` | Forces a concrete accent, bypassing the theme; documented contrast risk |
@@ -242,9 +244,10 @@ slice gates cover them by hand).
 
 | Suite | Fixtures |
 |---|---|
-| `git/status.test.ts` | clean repo; 2 modified + 1 untracked; staged-only; deleted; renamed (`2 ...`); unmerged (`u ...`); detached header; no upstream; ahead/behind values |
+| `git/status.test.ts` | clean repo; 2 modified + 1 untracked; staged-only; deleted; typechange; renamed (`2 ...` plus its NUL-separated original path); unmerged (`u ...`); ignored (`! ...`); detached header; initial oid; no upstream; ahead/behind; paths with spaces; malformed records; empty shortstat |
 | `view/model.test.ts` | width 28/34/44 line budgets; middle-ellipsis of a long path; branch right-ellipsis at 26; number formatting (`0`, `999`, `12.4k`, `1.2M`); stale marker; every `GitErrorCode` produces a result line |
-| `view/copy.test.ts` | no string contains a newline or a tab; every key used by the model exists |
+| `view/copy.test.ts` | no string contains a newline or a tab; every key used by the model exists; the copy deck's literal shapes |
+| `git/refs.test.ts` | option-like and empty names are rejected before any spawn |
 | `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults; first-run creation; `PI_CODING_AGENT_DIR` resolution |
 
 ## 10. Package manifest

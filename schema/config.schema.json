@@ -25,11 +25,11 @@
       "default": 96
     },
     "refreshIntervalMs": {
-      "description": "Refresh tick period.",
+      "description": "Refresh tick period. The default is 6000 ms because the shortstat tick measures ~86 ms on a 6000-file repository with 800 dirty paths (docs/03-architecture.md §5).",
       "type": "integer",
       "minimum": 1000,
       "maximum": 30000,
-      "default": 3000
+      "default": 6000
     },
     "shortstatEveryNTicks": {
       "description": "Throttle for `git diff --shortstat HEAD`.",

@@ -14,18 +14,32 @@ export type PanelHostResult = "closed" | "unsupported";
 
 export const OVERLAY_WIDTH = 36;
 
-export type PanelRequest = { readonly data: PanelData; readonly header: string | null };
+export type PanelRequest = {
+  readonly read: () => PanelData;
+  readonly header: string | null;
+  /** Registers a repaint callback while the panel is open; returns the unsubscribe. */
+  readonly attach: (listener: () => void) => () => void;
+};
 
 export async function showPanel(ctx: ExtensionContext, request: PanelRequest): Promise<PanelHostResult> {
   if (ctx.mode !== "tui") return "unsupported";
 
   await ctx.ui.custom<void>(
-    (_tui, theme, _keybindings, done) => {
-      const panel = createSidebar({ data: request.data, theme, header: request.header, onClose: () => done(undefined) });
+    (tui, theme, _keybindings, done) => {
+      const detach = request.attach(() => tui.requestRender());
+      let closed = false;
+      const close = (): void => {
+        if (closed) return;
+        closed = true;
+        detach();
+        done(undefined);
+      };
+      const panel = createSidebar({ read: request.read, theme, header: request.header, onClose: close });
       return {
         render: (width: number) => panel.render(width),
         invalidate: () => panel.invalidate(),
         handleInput: (input: string) => panel.handleInput?.(input),
+        dispose: () => detach(),
       };
     },
     {

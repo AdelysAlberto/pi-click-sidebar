@@ -36,7 +36,7 @@ export const DEFAULT_CONFIG: Config = {
   mode: "auto",
   dockWidth: 34,
   dockMinTerminalWidth: 96,
-  refreshIntervalMs: 3000,
+  refreshIntervalMs: 6000,
   shortstatEveryNTicks: 3,
   showFileList: false,
   accentOverride: null,

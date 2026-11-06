@@ -2,6 +2,7 @@
  * Every user-visible string. One module so the copy deck in
  * `docs/02-ux-spec.md` §7 has exactly one implementation.
  */
+import { formatCount } from "./text.ts";
 
 export const SECTION_PROJECT = "PROJECT";
 export const SECTION_CHANGES = "CHANGES";
@@ -33,19 +34,19 @@ export function fileCount(count: number): string {
 }
 
 export function insertions(value: number): string {
-  return `+${value}`;
+  return `+${formatCount(value)}`;
 }
 
 export function deletions(value: number): string {
-  return `−${value}`;
+  return `−${formatCount(value)}`;
 }
 
 export function untracked(value: number): string {
-  return `✚${value}`;
+  return `✚${formatCount(value)}`;
 }
 
 export function deleted(value: number): string {
-  return `✖${value}`;
+  return `✖${formatCount(value)}`;
 }
 
 export function aheadBehind(ahead: number, behind: number): string {

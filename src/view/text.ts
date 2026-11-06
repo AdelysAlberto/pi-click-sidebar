@@ -50,3 +50,18 @@ export function displayPath(absolutePath: string, home: string = os.homedir()): 
   if (home.length > 0 && absolutePath.startsWith(`${home}/`)) return `~${absolutePath.slice(home.length)}`;
   return absolutePath;
 }
+
+/**
+ * Counts in at most three significant digits: `0`, `999`, `12.4k`, `1.2M`.
+ * Fixed width keeps the dock's numeric column from jittering while streaming.
+ */
+export function formatCount(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const sign = value < 0 ? "-" : "";
+  const size = Math.abs(value);
+  const trim = (scaled: number): string => scaled.toFixed(1).replace(/\.0$/, "");
+  if (size < 1000) return `${sign}${Math.round(size)}`;
+  if (size < 1_000_000) return `${sign}${trim(size / 1000)}k`;
+  if (size < 1_000_000_000) return `${sign}${trim(size / 1_000_000)}M`;
+  return `${sign}${trim(size / 1_000_000_000)}G`;
+}

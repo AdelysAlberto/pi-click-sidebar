@@ -64,11 +64,15 @@ export type PanelData = {
   readonly model: ModelSummary;
   readonly result: { readonly kind: ResultKind; readonly line: string } | null;
   readonly stale: boolean;
-  readonly gitMissing: boolean;
+  /** `none` renders the project plus one dim line; there is nothing else to show. */
+  readonly repository: RepositoryState;
 };
 
+export type RepositoryState = "ok" | "none" | "git-missing";
+
 export type SidebarProps = {
-  readonly data: PanelData;
+  /** Read on every render: the dock refreshes in place, it is not rebuilt. */
+  readonly read: () => PanelData;
   readonly theme: Theme;
   /** Shown inside the frame; the overlay needs it, the dock knows it is the sidebar. */
   readonly header: string | null;
@@ -91,7 +95,7 @@ export function createSidebar(props: SidebarProps): Component {
     const width = Math.max(MIN_WIDTH, Math.floor(requested));
     const inner = width - 2;
     const column = inner - 2;
-    const data = props.data;
+    const data = props.read();
 
     const row = (styled: string): string => `${frame("│")} ${padToWidth(styled, column)} ${frame("│")}`;
     const blank = (): string => row("");
@@ -104,11 +108,10 @@ export function createSidebar(props: SidebarProps): Component {
       project.push(row(theme.fg("dim", middleEllipsis(displayPath(data.project.path), column))));
     }
 
-    const changes: string[] = data.gitMissing
-      ? [row(theme.fg("error", GIT_MISSING))]
-      : renderChanges(data, row, column, theme);
-
-    const branch: string[] = data.branch === null ? [] : renderBranch(data, row, column, theme);
+    const changes: string[] =
+      data.repository === "ok" ? renderChanges(data, row, column, theme) : [row(theme.fg("dim", reasonLine(data)))];
+    const branch: string[] =
+      data.repository === "ok" && data.branch !== null ? renderBranch(data, row, column, theme) : [];
 
     const resultStyle = stylish(theme, data.result?.kind);
     const result: string[] = [row(data.result === null ? "" : resultStyle(data.result.line))];
@@ -120,9 +123,8 @@ export function createSidebar(props: SidebarProps): Component {
     ];
 
     // One blank line between sections, never at the top or bottom of the frame.
-    const sections = [project, changes, branch, renderActions(row, theme), result, model].filter(
-      (section) => section.length > 0,
-    );
+    const actions = data.repository === "ok" ? renderActions(row, theme) : [];
+    const sections = [project, changes, branch, actions, result, model].filter((section) => section.length > 0);
     const body = sections.flatMap((section, index) => (index === 0 ? section : [blank(), ...section]));
 
     const head: string[] = [frame(`╭${"─".repeat(inner)}╮`)];
@@ -142,6 +144,10 @@ export function createSidebar(props: SidebarProps): Component {
   };
 }
 
+function reasonLine(data: PanelData): string {
+  return data.repository === "git-missing" ? GIT_MISSING : NOT_A_REPO;
+}
+
 function stylish(theme: Theme, kind: ResultKind | undefined): (text: string) => string {
   if (kind === "ok") return (text) => theme.fg("success", text);
   if (kind === "fail") return (text) => theme.fg("error", text);
@@ -158,15 +164,16 @@ function renderChanges(
   const changes = data.changes;
   if (changes === null) return [row(spread(heading(theme, SECTION_CHANGES), theme.fg("dim", "—"), column))];
   const numberStyle = data.stale ? (text: string) => theme.fg("dim", text) : (text: string) => theme.fg("text", text);
+  const dirtyStyle = data.stale ? (text: string) => theme.fg("dim", text) : (text: string) => theme.fg("warning", text);
   return [
     row(spread(heading(theme, SECTION_CHANGES), theme.fg("muted", fileCount(changes.files)), column)),
     row(
       [
         numberStyle(insertions(changes.insertions)),
         numberStyle(deletions(changes.deletions)),
-        "  ",
-        theme.fg("warning", untracked(changes.untracked)),
-        theme.fg("warning", deleted(changes.deleted)),
+        " ",
+        dirtyStyle(untracked(changes.untracked)),
+        dirtyStyle(deleted(changes.deleted)),
       ].join(" "),
     ),
   ];

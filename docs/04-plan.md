@@ -110,6 +110,19 @@ node --test "src/**/*.test.ts" && npx tsc --noEmit
 cd <any-repo> && time git status --porcelain=v2 --branch >/dev/null
 ```
 
+**Result (2026-11-06): done.** Numbers checked against the hand-read commands on a repository with one
+deleted, one modified, one staged and one untracked path: `git status --porcelain=v2 --branch` gave 3
+tracked entries plus 1 untracked, `git diff --shortstat HEAD` gave `3 files changed, 3 insertions(+), 2
+deletions(-)`, and the panel read `CHANGES 3 files`, `+3 −2 ✚1 ✖1`. The six edge cases were each captured
+from a live session: no commits (`main`, `0 files`, `+0 −0`), detached (`(detached) f251ef6`), no upstream,
+non-git directory (`not a git repository`), a subdirectory of a repository (root path, not the cwd), and a
+`git` shim exiting 127 (`git not found in PATH`).
+
+Measured with the real `exec.ts` on 6 000 files and 800 dirty paths: probe + status is 21.9 ms median
+(27.0 max), inside the 40 ms budget. The tick that also runs `diff --shortstat HEAD` costs 86.2 ms median,
+so per §5 of the architecture the default `refreshIntervalMs` doubled to 6000 and the three reads now run
+concurrently. Reading the tree never blocks a frame: the panel keeps rendering the previous model.
+
 ## S3 — Rail and keyboard
 
 `view/rail.ts` (one line, `aboveEditor` widget, `MouseRegion` per segment) and `host/keymap.ts`
