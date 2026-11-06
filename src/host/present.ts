@@ -183,6 +183,10 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
     },
 
     mountDock(tui: unknown, read: () => PanelData): boolean {
+      if (!["auto", "dock"].includes(options.config().mode)) {
+        presenter.release();
+        return false;
+      }
       tuiHost = tui;
       // Mounting twice would wrap the wrapper and draw two lanes; the second
       // call only has to make sure the existing one is still in place.
@@ -235,6 +239,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
     },
 
     release(): void {
+      presenter.blurDock();
       dock?.restore();
       dock = null;
     },

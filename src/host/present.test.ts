@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPresenter } from "./present.ts";
 import type { PanelData } from "../view/sidebar.ts";
+import type { Config } from "../config.ts";
+import type { Component } from "@earendil-works/pi-tui";
 
 const theme = {
   fg: (_token: string, text: string) => text,
@@ -31,13 +33,13 @@ const data: PanelData = {
   repository: "none",
 };
 
-function presenter() {
+function presenter(readConfig: () => Config = () => config) {
   return createPresenter({
     onCommand: () => {},
     onAction: () => {},
     onRailOpen: () => {},
     onBlur: () => {},
-    config: () => config,
+    config: readConfig,
     getTheme: () => theme,
     forwardToEditor: () => {},
   });
@@ -84,4 +86,27 @@ test("unmounting the rail leaves no listener behind", () => {
   renders = 0;
   panel.repaint();
   assert.equal(renders, 0);
+});
+
+test("non-dock modes restore the original layout rather than hiding only the surface label", () => {
+  let mode: Config["mode"] = "auto";
+  const panel = presenter(() => ({ ...config, mode }));
+  const hostRoot: Component = { render: () => ["host"], invalidate() {} };
+  let root: Component | undefined = hostRoot;
+  const tui = {
+    mode: "fullscreen",
+    getMountedRoots: () => root === undefined ? [] : [root],
+    setLayoutRoot: (component: Component | undefined) => { root = component; },
+  };
+  for (const next of ["off", "rail", "overlay"] as const) {
+    mode = "auto";
+    assert.equal(panel.mountDock(tui, () => data), true);
+    assert.notEqual(root, hostRoot);
+    mode = next;
+    assert.equal(panel.mountDock(tui, () => data), false);
+    assert.equal(root, hostRoot);
+    assert.equal(panel.hasDock(), false);
+    panel.reconcile(() => data);
+    assert.equal(root, hostRoot);
+  }
 });
