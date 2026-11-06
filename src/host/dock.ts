@@ -72,7 +72,9 @@ export function mountDock(tui: unknown, options: DockOptions): DockHandle | null
     // cases the thing to wrap is whatever is mounted now.
     hostRoot = current;
     wrapped = new HStack([
-      { component: current, grow: 1, shrink: 1, minSize: 24 },
+      // A numeric basis skips intrinsic-width measurement of the whole history.
+      // Auto alternates full/docked widths each frame, evicting host render caches.
+      { component: current, basis: 0, grow: 1, shrink: 1, minSize: 24 },
       {
         component: options.lane,
         basis: options.laneWidth,

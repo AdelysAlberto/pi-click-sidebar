@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { planSubmit } from "./branch-modal.ts";
+import { createBranchModal, planSubmit } from "./branch-modal.ts";
 
 const clean = { base: "main", name: "", dirtyFiles: 0 };
 
@@ -48,4 +48,45 @@ test("ordinary names pass the client-side gate", () => {
   for (const name of ["feat/sidebar", "fix/argv-only", "release-0.1.0", "a/b/c", "probe_base"]) {
     assert.equal(planSubmit({ ...clean, name }).kind, "create", name);
   }
+});
+
+test("one physical click on switch submits once", () => {
+  const theme = { fg: (_token: string, text: string) => text, bold: (text: string) => text } as never;
+  const plans: unknown[] = [];
+  const modal = createBranchModal({
+    theme,
+    branches: [
+      { name: "main", committedAt: 1 },
+      { name: "feat/x", committedAt: 2 },
+    ],
+    current: "main",
+    dirtyFiles: 0,
+    intent: "switch",
+    onSubmit: async (plan) => {
+      plans.push(plan);
+      return null;
+    },
+    onClose: () => {},
+    requestRender: () => {},
+  });
+  const rows = modal.render(44);
+  const y = rows.findIndex((line) => line.includes("switch") && line.includes("cancel"));
+  assert.ok(y >= 0, "the button row is drawn");
+  const x = (rows[y] ?? "").indexOf("switch") + 1;
+  const event = {
+    button: "left" as const,
+    x,
+    y,
+    screenX: 60,
+    screenY: 8,
+    width: 44,
+    height: rows.length,
+    shift: false,
+    alt: false,
+    ctrl: false,
+  };
+  // press then click: the host dispatches both for one gesture.
+  assert.equal(modal.handleMouse?.({ ...event, type: "press" }) === undefined, true);
+  assert.equal(modal.handleMouse?.({ ...event, type: "click" }) !== undefined, true);
+  assert.equal(plans.length, 1);
 });

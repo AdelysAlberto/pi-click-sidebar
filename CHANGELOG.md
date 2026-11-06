@@ -6,6 +6,33 @@ gate, commits and tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every click ran twice.** A physical click reaches a component as `press` and then as a synthesised
+  `click` on release, and both were answered: clicking `fetch` started it and immediately reported
+  `fetch is still running · esc cancels it`, and the branch modal's `switch` button submitted twice. Only a
+  left `click` activates now (`isActivation` in `src/view/hits.ts`); a press, a drag, a release and a right
+  click do not.
+- **Clicks in the overlay surface.** The overlay host never forwarded `handleMouse` to the panel, so the
+  rows it drew as clickable answered nothing. It forwards now.
+- **A clipped refusal reason.** The result slot was one row, so git's own sentence ended in `no upstream
+  branch c…`. It is word-wrapped into as many rows as it needs and the frame grows by them; nothing else
+  changes, since a clipped branch name or count is still readable.
+- **No `git` while nothing draws the model.** With `mode: off` the tick still spawned `git status` every
+  interval for a panel that does not exist. The refresher now takes an `active` predicate and does no work
+  at all while it is false, without stopping the timer.
+- **A repaint listener per remount, and a lane built twice.** Every remount of the rail added a listener
+  and never removed it, so one repaint rendered the frame once per past mount; `mountDock` also built two
+  lane components, so the drawn panel never matched the one that received focus. One listener per surface
+  (`src/host/repaint.ts`), one component per mount.
+
+### Added
+
+- **Tests for the refresher.** Eight: the first read, the idle-tick throttle, `markDirty`, the reentrancy
+  guard, the 15 s backoff after three failures, the unchanged-model check, `active`, and `dispose`. The
+  module had none, and it owns the timer every tick of the session runs through.
+- **`src/host/lane.ts`.** Mounting the dock lane left the entry point, which is 239 lines now.
+
 ## [0.1.2] - 2026-11-06
 
 ### Fixed

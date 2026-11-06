@@ -61,6 +61,8 @@ export async function showPanel(ctx: ExtensionContext, request: PanelRequest): P
         render: (width: number) => panel.render(width),
         invalidate: () => panel.invalidate(),
         handleInput: (input: string) => panel.handleInput?.(input),
+        // Without this the overlay draws clickable rows that answer nothing.
+        handleMouse: (event) => panel.handleMouse?.(event),
         dispose: () => detach(),
       };
     },

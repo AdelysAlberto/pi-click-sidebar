@@ -38,6 +38,49 @@ export function padToWidth(styled: string, width: number): string {
   return `${styled}${" ".repeat(width - visible)}`;
 }
 
+/**
+ * Word wrap at `width` visible columns, for plain text: the panel styles each
+ * line after wrapping. A word wider than the column is split at the column
+ * instead of being dropped, because a refusal reason is the useful part and
+ * `no upstream branch configured for pull` must not become `no upstream b…`.
+ */
+export function wrapToWidth(text: string, width: number): readonly string[] {
+  if (width <= 0) return [];
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    if (word.length === 0) continue;
+    let rest = word;
+    while (visibleWidth(rest) > width) {
+      if (line.length > 0) {
+        lines.push(line);
+        line = "";
+      }
+      // Split by grapheme and measure the prefix: slicing what `truncateToWidth`
+      // returns would cut through the reset sequence it appends.
+      const chars = Array.from(rest);
+      let taken = 0;
+      let head = "";
+      for (const char of chars) {
+        if (taken > 0 && visibleWidth(head + char) > width) break;
+        head += char;
+        taken += 1;
+      }
+      lines.push(head);
+      rest = chars.slice(taken).join("");
+    }
+    if (rest.length === 0) continue;
+    const candidate = line.length === 0 ? rest : `${line} ${rest}`;
+    if (visibleWidth(candidate) <= width) line = candidate;
+    else {
+      lines.push(line);
+      line = rest;
+    }
+  }
+  if (line.length > 0) lines.push(line);
+  return lines;
+}
+
 /** Two styled cells on one row: left aligned and right aligned. */
 export function spread(left: string, right: string, width: number): string {
   const leftWidth = visibleWidth(left);

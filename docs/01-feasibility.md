@@ -201,9 +201,13 @@ switch by the status line and the lane frame counter, never by leftover pixels.
    derives its height from `process.stdout.rows` is wrong twice: the value is `0` on a pty whose size was
    not set (the first spike attempt drew exactly one lane row), and it ignores the host's own row budget.
    `view/dock.ts` must size the lane from the captured viewport.
-4. **A numeric `basis` avoids a second transcript render.** `layoutComponent` measures intrinsic width
-   only when `entry.basis` is not a number, so a fixed-width lane costs one host render per frame
-   instead of two (one to measure at full width, one at the allocated width).
+4. **Both horizontal entries need a numeric `basis`.** `layoutComponent` measures intrinsic width
+   when `entry.basis` is not a number. Fixing only the lane's basis leaves the host root measured at
+   full width, then rendered at docked width on every frame. **UPDATE:** the original claim that a
+   fixed-width lane alone avoided that render was incorrect. `host/dock.ts` now uses `basis: 0` plus
+   `grow: 1` for the host entry. Pi 1.5.0 still measures intrinsic height and traverses the host layout
+   at the allocated width, but no longer alternates widths and invalidates Markdown caches on scroll.
+   Reproduction, measured results and validation limits: `05-scroll-performance.md`.
 
 Reproduction (throwaway, never committed):
 

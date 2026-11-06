@@ -125,6 +125,10 @@ All lines pass through `truncateToWidth()`; the component measures with `visible
 assumes `String.length` equals columns (the glyphs `⎇ ✚ ✖ ↑ ↓ ✓ ✗ ⏵` are narrow in most terminals but
 not all).
 
+The result slot is the one exception: git's refusal reason is the useful part, so it is word-wrapped
+(`wrapToWidth`) into as many rows as it needs and the frame grows by those rows. A clipped branch name or
+count is still readable; a clipped reason is not, and `✗ pull · no upstream branch c…` says nothing.
+
 ## 4. States
 
 | State | Dock | Result line |
@@ -179,6 +183,13 @@ Three rules that came from using it, not from designing it:
 | click | `CHANGES` label | Toggle the changed-file list |
 | click | project path | Copy the absolute path to the clipboard via `ctx.ui.notify` confirmation |
 | wheel | changed-file list | Scroll inside the section, never the transcript |
+
+One gesture is one activation. `pi-tui` delivers a physical click **twice**: `press` on the way down, then
+a synthesised `click` when the release lands on the same cell (`pi-tui/dist/tui-alt-screen.js:721-742`).
+Only the `click` runs the action — answering the `press` as well started every verb twice, and the second
+copy was refused as `fetch is still running`. A press is therefore not an activation, and neither is a
+right click, a drag, or a release after the pointer moved. The rule lives in `isActivation`
+(`view/hits.ts`) and every clickable surface uses it.
 
 ## 6. Branch modal
 

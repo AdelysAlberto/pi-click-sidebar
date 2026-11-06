@@ -28,6 +28,12 @@ export type RefresherOptions = {
   /** Called with the new model only when it differs from the previous one. */
   readonly onUpdate: (data: PanelData) => void;
   readonly onError?: (error: unknown) => void;
+  /**
+   * False while nothing draws the model (`mode: off`). The tick then does no
+   * work at all, no process and no frame; the timer keeps running so switching
+   * the mode back needs no remount.
+   */
+  readonly active?: () => boolean;
 };
 
 const STALE_AFTER_FAILURES = 3;
@@ -55,6 +61,7 @@ export function createRefresher(options: RefresherOptions): Refresher {
 
   const runTick = async (force: boolean): Promise<void> => {
     if (stopped || inFlight) return;
+    if (options.active !== undefined && !options.active()) return;
     if (!force && !dirty && ticks % options.shortstatEveryNTicks !== 0) {
       ticks += 1;
       return;

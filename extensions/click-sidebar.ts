@@ -22,6 +22,7 @@ import { registerToggle } from "../src/host/keymap.ts";
 import { NO_MODEL } from "../src/view/copy.ts";
 import { buildPanelData, type SessionInfo } from "../src/view/model.ts";
 import { createActionRunner } from "../src/host/action-runner.ts";
+import { mountLane } from "../src/host/lane.ts";
 import type { PanelData } from "../src/view/sidebar.ts";
 
 const COMMAND = "sidebar";
@@ -172,6 +173,9 @@ export default function clickSidebar(pi: ExtensionAPI): void {
       initial: initialData(),
       intervalMs: settings.refreshIntervalMs,
       shortstatEveryNTicks: settings.shortstatEveryNTicks,
+      // `mode: off` draws nothing, so the tick would spawn git for a panel that
+      // does not exist. The timer keeps running, so a mode switch needs no remount.
+      active: () => (modeOverride ?? cached?.config.mode ?? DEFAULT_CONFIG.mode) !== "off",
       onUpdate: () => {
         presenter.reconcile(currentData);
         presenter.repaint();
@@ -179,25 +183,7 @@ export default function clickSidebar(pi: ExtensionAPI): void {
     });
     refresher.start();
     presenter.mountRail(ctx, currentData);
-    mountLane(ctx);
-  };
-
-  /**
-   * The dock needs the live TUI object, and the documented way to receive it is
-   * a widget factory. The rail's factory is the first one available, so the lane
-   * is mounted from the widget that already owns a render.
-   */
-  const mountLane = (ctx: ExtensionContext): void => {
-    ctx.ui.setWidget(
-      "click-sidebar-probe",
-      (tui) => {
-        presenter.mountDock(tui, currentData);
-        // The probe widget draws nothing; it exists to hand over the TUI.
-        return { render: () => [], invalidate: () => {} };
-      },
-      { placement: "aboveEditor" },
-    );
-    ctx.ui.setWidget("click-sidebar-probe", undefined);
+    mountLane({ ctx, presenter, read: currentData });
   };
 
   /** Refresh on the events that change what the panel shows, never a write. */
@@ -236,7 +222,7 @@ export default function clickSidebar(pi: ExtensionAPI): void {
     presenter,
     openPanel,
     refreshSurfaces: (ctx) => {
-      mountLane(ctx);
+      mountLane({ ctx, presenter, read: currentData });
       presenter.reconcile(currentData);
       presenter.repaint();
     },
