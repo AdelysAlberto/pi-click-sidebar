@@ -254,6 +254,20 @@ cd <repo> && git switch -c probe/base development && git switch development && g
 npx tsc --noEmit
 ```
 
+**Result (2026-11-06): done**, against the local repository from Slice 5.
+
+| Criterion | Observed |
+|---|---|
+| switch moves HEAD and the dock updates | modal on `main`, arrow to `feat/noupstream`, enter → `HEAD` is `feat/noupstream` and the lane shows it within one tick |
+| `switch -c <name> <base>` starts from the base | with `feat/noupstream` selected, `probe/base` was created and its tip is that same commit (`git log --graph -3 probe/base` → `3b7b004 four`) |
+| invalid names rejected before any process | `foo..bar` → `cannot contain ..`, no ref created; the same for `-x`, `a b`, `/start/`, `x.lock`, an empty name |
+| an existing name is `branch-exists` and keeps the text | typing `main` → `branch main already exists`, input still `main` |
+| dirty tree disables submit | untracked file present → `1 uncommitted file · commit or discard first`, enter creates nothing |
+| keyboard complete, `esc` returns focus | arrows, `tab`, `enter`, `esc`; after `esc` the typed text landed in the editor (`❯ hola`) |
+
+One correction: closing the modal returned focus to the lane, not the editor, because the lane was what had
+focus before the overlay opened. `openBranches` now blurs the lane after the modal resolves.
+
 ## S7 — Package and handoff
 
 `README.md` (install, keys, modes, limits, the HTTPS-prompt caveat), `CHANGELOG.md` with `## [0.1.0]`,

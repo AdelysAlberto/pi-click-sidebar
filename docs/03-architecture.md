@@ -76,11 +76,13 @@ pi-click-sidebar/                    (repository root = package root)
     │   ├── rail.ts           ~145  one-line widget for regular mode
     │   ├── sidebar.ts        ~173  the panel component: frame, rows, keys, clicks
     │   ├── rail.ts            ~80  one-line widget (regular mode)
-    │   └── branch-modal.ts   ~150  select + input overlay
+    │   ├── branch-modal.ts   ~208  base list + name field, submit plan (pure)
     └── host/
         ├── dock.ts           ~106  probe, HStack wrap, reconcile, restore
         ├── commands.ts        ~56  `/sidebar config` and `/sidebar mode`
         ├── action-runner.ts  ~130  one verb at a time, progress line, result hold
+        ├── branch-flow.ts     ~95  opens the modal, runs the switch it returns
+        ├── dispatch.ts        ~70  key or click → the same command
         ├── present.ts         ~25  pick the host: dock, else overlay
         ├── overlay.ts         ~43  show/hide the panel as an overlay
         ├── refresh.ts        ~111  one timer, shortstat throttle, backoff
@@ -280,6 +282,7 @@ slice gates cover them by hand).
 | `view/keymap.test.ts` | every documented key resolves; unknown input returns `null` so the editor keeps it |
 | `view/surface.test.ts` | the surface decision for every mode, width and probe outcome, including each fallback |
 | `view/hits.test.ts` | a click inside a region reports its action; borders, padding, the wrong row and stale rows do not |
+| `view/branch-modal.test.ts` | the submit plan: switch, create, dirty-tree block, and every invalid name with its exact reason |
 | `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults; first-run creation; `PI_CODING_AGENT_DIR` resolution |
 
 ## 10. Package manifest

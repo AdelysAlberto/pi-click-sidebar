@@ -12,13 +12,13 @@ import {
   type Mode,
 } from "../src/config.ts";
 import { createCommandHandler } from "../src/host/commands.ts";
+import { createDispatch } from "../src/host/dispatch.ts";
+import { openBranchModal } from "../src/host/branch-flow.ts";
 import { createGitRun } from "../src/git/exec.ts";
 import { readSnapshot } from "../src/git/snapshot.ts";
 import { createPresenter } from "../src/host/present.ts";
 import { createRefresher, type Refresher } from "../src/host/refresh.ts";
-import { describeUnavailable, registerToggle } from "../src/host/keymap.ts";
-import type { HitAction } from "../src/view/hits.ts";
-import type { PanelCommand } from "../src/view/keymap.ts";
+import { registerToggle } from "../src/host/keymap.ts";
 import { NO_MODEL } from "../src/view/copy.ts";
 import { buildPanelData, type SessionInfo } from "../src/view/model.ts";
 import { createActionRunner } from "../src/host/action-runner.ts";
@@ -39,46 +39,9 @@ export default function clickSidebar(pi: ExtensionAPI): void {
   let session: SessionInfo = { cwd: ".", modelId: NO_MODEL, thinking: "off", contextPercent: null };
   let stale = false;
 
-  /** Verbs reach the actions layer in slice 5 and the modal in slice 6. */
-  const runCommand = (command: PanelCommand): void => {
-    const ctx = activeCtx;
-    if (ctx === undefined) return;
-    if (command === "refresh") {
-      refresher?.markDirty();
-      void refresher?.refreshNow().then(() => presenter.repaint());
-      return;
-    }
-    if (command === "fetch" || command === "pull" || command === "push") {
-      void runner.run(command);
-      return;
-    }
-    const unavailable = describeUnavailable(command);
-    if (unavailable !== null) ctx.ui.notify(`click-sidebar: ${unavailable}`, "info");
-  };
-
-  /** A click on a segment: the same commands the keyboard reaches. */
-  const runAction = (action: HitAction): void => {
-    const ctx = activeCtx;
-    if (ctx === undefined) return;
-    switch (action.kind) {
-      case "verb":
-        runCommand(action.verb === "refresh" ? "refresh" : (action.verb as PanelCommand));
-        return;
-      case "branch":
-        ctx.ui.notify("click-sidebar: switching branches arrives in slice 6", "info");
-        return;
-      case "changes":
-        ctx.ui.notify("click-sidebar: the changed-file list arrives in a later slice", "info");
-        return;
-      case "project":
-        ctx.ui.notify(`click-sidebar: ${session.cwd}`, "info");
-        return;
-    }
-  };
-
   const presenter = createPresenter({
-    onCommand: runCommand,
-    onAction: runAction,
+    onCommand: (command) => dispatch.command(command),
+    onAction: (action) => dispatch.action(action),
     onRailOpen: () => {
       const ctx = activeCtx;
       if (ctx !== undefined) void openPanel(ctx);
@@ -141,6 +104,38 @@ export default function clickSidebar(pi: ExtensionAPI): void {
       await refresher?.refreshNow();
     },
   });
+
+  /** `s` and `n` both open the modal; `n` starts with the name field focused. */
+  const dispatch = createDispatch({
+    ctx: () => activeCtx,
+    runner,
+    openBranches: (ctx, intent) => openBranches(ctx, intent),
+    cwd: () => session.cwd,
+    refresh: async () => {
+      await refresher?.refreshNow();
+      presenter.repaint();
+    },
+  });
+
+  const openBranches = async (ctx: ExtensionContext, intent: "switch" | "create"): Promise<void> => {
+    const settings = config(ctx).config;
+    if (settings.mode === "off") return;
+    await openBranchModal(
+      ctx,
+      {
+        git,
+        cwd: session.cwd,
+        config: settings,
+        refresh: async () => {
+          await refresher?.refreshNow();
+          presenter.repaint();
+        },
+      },
+      intent,
+    );
+    // Closing the modal leaves the operator in the editor, not in the lane.
+    presenter.blurDock();
+  };
 
   const openPanel = async (ctx: ExtensionContext): Promise<void> => {
     const settings = config(ctx).config;

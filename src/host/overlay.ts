@@ -15,6 +15,8 @@ import { createSidebar } from "../view/sidebar.ts";
 export type PanelHostResult = "closed" | "unsupported";
 
 export const OVERLAY_WIDTH = 36;
+/** The branch modal needs room for two columns of branch names. */
+export const MODAL_WIDTH = 44;
 
 export type PanelRequest = {
   readonly read: () => PanelData;
