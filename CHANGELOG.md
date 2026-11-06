@@ -6,6 +6,8 @@ gate, commits and tags.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-06
+
 ### Fixed
 
 - **The keyboard.** With the dock focused, keys the panel did not bind were dropped, so typing disappeared
@@ -80,6 +82,7 @@ First release.
   `env` to disable the prompt.
 - The changed-file list (`d`) and file-level detail are not in this release.
 
-[Unreleased]: https://github.com/AdelysAlberto/pi-click-sidebar/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/AdelysAlberto/pi-click-sidebar/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/AdelysAlberto/pi-click-sidebar/releases/tag/v0.1.2
 [0.1.1]: https://github.com/AdelysAlberto/pi-click-sidebar/releases/tag/v0.1.1
 [0.1.0]: https://github.com/AdelysAlberto/pi-click-sidebar/releases/tag/v0.1.0

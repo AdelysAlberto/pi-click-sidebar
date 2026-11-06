@@ -1,6 +1,6 @@
 {
   "name": "pi-click-sidebar",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Clickable right sidebar for Pi: project, git changes, branch actions and model context",
   "type": "module",
   "license": "MIT",
