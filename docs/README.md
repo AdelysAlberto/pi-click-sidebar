@@ -18,7 +18,7 @@ Repository: `https://github.com/AdelysAlberto/pi-click-sidebar`.
 
 ## Status
 
-`S0–S7 done, release pending`. `01-feasibility.md` §6 answered the one question it exists for: the host layout
+`S0–S7 done. v0.1.0 published, main pushed.` `01-feasibility.md` §6 answered the one question it exists for: the host layout
 root **can** be wrapped in an `HStack`, so dock mode is the primary shape and `S4` is a real dock, not the
 overlay-only fallback. All four pass criteria are observed, including the `tuiMode` round trip.
 

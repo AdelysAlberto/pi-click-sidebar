@@ -301,15 +301,23 @@ PROJECT, CHANGES, BRANCH and MODEL sections and answered `/sidebar config` with 
 lane appeared — a clean unload. No absolute path exists outside `docs/`, where the only occurrences are the
 S7 detector command and the `/tmp` log paths.
 
-README, CHANGELOG (`## [0.1.0]`) and `docs/upstream/tui-layout-root.md` are written. The `$schema` line is
-**not** in the config file yet, and the condition the plan set has not been met: the schema 404s at
-`https://raw.githubusercontent.com/AdelysAlberto/pi-click-sidebar/main/schema/config.schema.json` because
-this branch is not on `main` yet, and the plan says to add the line only once a raw URL exists. The exact
-change is one line at the top of the file written by `config.ts`:
+README, CHANGELOG (`## [0.1.0]`) and `docs/upstream/tui-layout-root.md` are written. The `$schema` condition
+was met after the merge: the raw URL answers 200, so the file written on first run carries it, the parser
+treats it as a known key, and `schema/config.schema.json` accepts it.
 
-```json
-"$schema": "https://raw.githubusercontent.com/AdelysAlberto/pi-click-sidebar/main/schema/config.schema.json"
-```
+Release verification, once `main` and `v0.1.0` were pushed:
+
+| Check | Observed |
+|---|---|
+| `pi install git:github.com/AdelysAlberto/pi-click-sidebar@v0.1.0` | installed from the tag, `pi list` shows it |
+| a plain session with the git install | dock present with PROJECT, CHANGES, BRANCH, MODEL |
+| absolute paths in the installed tree | none outside `docs/` |
+| `pi remove` of the git source | gone from `pi list`, nothing left behind |
+| `schema/config.schema.json` over HTTPS | 200 at both `main` and the tag |
+
+`npm run release:tag` produced the annotated tag after running the gate; `scripts/release.ts` implements
+`patch`, `minor`, `major` and `tag`, refuses a dirty tree or a branch other than `main`, moves
+`## [Unreleased]` into a dated heading, commits and tags, and pushes only with `--push`.
 
 ## Out of scope for v1
 

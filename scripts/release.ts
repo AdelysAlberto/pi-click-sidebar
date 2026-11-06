@@ -15,7 +15,7 @@
  * release works, since the package started at 0.1.0.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "node:path";
 
@@ -44,6 +44,13 @@ function run(command: string, args: string[]): void {
   process.stdout.write(`release: ${command} ${args.join(" ")}\n`);
   const result = spawnSync(command, args, { cwd: ROOT, stdio: "inherit" });
   if (result.status !== 0) fail(`${command} ${args.join(" ")} failed`);
+}
+
+/** A fresh clone has no node_modules; the gate needs the dev toolchain. */
+function ensureToolchain(): void {
+  if (existsSync(path.join(ROOT, "node_modules", ".bin", "tsc"))) return;
+  process.stdout.write("release: installing the dev toolchain\n");
+  run("npm", ["install", "--no-audit", "--no-fund"]);
 }
 
 function nextVersion(current: string, bump: Bump): string {
@@ -96,6 +103,7 @@ function main(): void {
   if (git(["tag", "--list", tag]).length > 0) fail(`${tag} already exists`);
 
   // The gate the repository contract declares, before anything is written.
+  ensureToolchain();
   run("npx", ["tsc", "--noEmit"]);
   run("node", ["--test", "src/**/*.test.ts"]);
 
