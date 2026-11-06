@@ -66,10 +66,11 @@ function nextVersion(current: string, bump: Bump): string {
 
 function updateChangelog(version: string, date: string): void {
   const original = readFileSync(CHANGELOG, "utf8");
-  const unreleased = "## [Unreleased]";
-  if (!original.includes(unreleased)) fail("CHANGELOG.md has no '## [Unreleased]' heading to release");
+  // Anchored to the heading line: the same words appear in the explanatory prose.
+  const unreleased = /^## \[Unreleased\]$/m;
+  if (!unreleased.test(original)) fail("CHANGELOG.md has no '## [Unreleased]' heading to release");
 
-  let next = original.replace(unreleased, `${unreleased}\n\n## [${version}] - ${date}`);
+  let next = original.replace(unreleased, `## [Unreleased]\n\n## [${version}] - ${date}`);
 
   // Keep the compare links honest: Unreleased moves to the new tag.
   next = next.replace(

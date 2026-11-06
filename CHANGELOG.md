@@ -1,8 +1,8 @@
 # Changelog
 
 Every release gets a heading in the form `## [x.y.z]`, because Pi reads package changelogs. `npm run
-release:patch|minor|major` moves `## [Unreleased]` into a dated heading, bumps the version, runs the gate,
-commits and tags.
+release:patch|minor|major` moves the Unreleased notes into a dated heading, bumps the version, runs the
+gate, commits and tags.
 
 ## [Unreleased]
 
