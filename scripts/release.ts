@@ -69,6 +69,11 @@ function updateChangelog(version: string, date: string): void {
   // Anchored to the heading line: the same words appear in the explanatory prose.
   const unreleased = /^## \[Unreleased\]$/m;
   if (!unreleased.test(original)) fail("CHANGELOG.md has no '## [Unreleased]' heading to release");
+  // Writing the heading by hand before releasing would duplicate it once the
+  // Unreleased notes are moved down.
+  if (new RegExp(`^## \\[${version.replace(/\./g, "\\.")}\\]`, "m").test(original)) {
+    fail(`CHANGELOG.md already has a '## [${version}]' heading`);
+  }
 
   let next = original.replace(unreleased, `## [Unreleased]\n\n## [${version}] - ${date}`);
 
