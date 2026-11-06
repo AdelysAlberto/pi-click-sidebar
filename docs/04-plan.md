@@ -285,13 +285,30 @@ grep -rn "/Volumes/\|/Users/" <installed-package> || echo "no absolute paths"
 
 - A second machine (or a fresh `$HOME`) with only `pi install git:…@v0.1.0` gets the same result.
 - `pi list` shows the package; `pi remove` unloads it cleanly.
-- README documents every shortcut, every config key, and the three modes.
+- README documents every shortcut, every config key, and all four surfaces (`dock`, `rail`, `overlay`, `off`).
 
 **Verification**
 
 ```bash
 grep -rn "/Volumes/\|/Users/" . || echo "no absolute paths"
 pi install git:github.com/AdelysAlberto/pi-click-sidebar@v0.1.0 && pi list
+```
+
+**Result (2026-11-06): done, with one step that belongs to the merge.** `pi install <this directory>` from an
+unrelated directory registered the package, and a plain `pi` session (no `-e`) drew the dock with its
+PROJECT, CHANGES, BRANCH and MODEL sections and answered `/sidebar config` with the resolved path.
+`pi list` showed the entry; `pi remove` dropped it, after which `/sidebar config` answered nothing and no
+lane appeared — a clean unload. No absolute path exists outside `docs/`, where the only occurrences are the
+S7 detector command and the `/tmp` log paths.
+
+README, CHANGELOG (`## [0.1.0]`) and `docs/upstream/tui-layout-root.md` are written. The `$schema` line is
+**not** in the config file yet, and the condition the plan set has not been met: the schema 404s at
+`https://raw.githubusercontent.com/AdelysAlberto/pi-click-sidebar/main/schema/config.schema.json` because
+this branch is not on `main` yet, and the plan says to add the line only once a raw URL exists. The exact
+change is one line at the top of the file written by `config.ts`:
+
+```json
+"$schema": "https://raw.githubusercontent.com/AdelysAlberto/pi-click-sidebar/main/schema/config.schema.json"
 ```
 
 ## Out of scope for v1
