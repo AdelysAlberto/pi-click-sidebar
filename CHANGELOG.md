@@ -6,6 +6,17 @@ gate, commits and tags.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-06
+
+### Fixed
+
+- `/sidebar mode` drew two lanes: the command re-mounts the surface, and a second mount wrapped the existing
+  wrapper. Mounting is idempotent now, with a test that drives the module against a fake viewport TUI.
+- The config file written on first run carries `$schema`, pointing at the published schema. The parser
+  treats it as a known key instead of reporting it as unknown.
+- `scripts/release.ts` installs the dev toolchain when run in a fresh clone, and rewrites only the
+  `## [Unreleased]` heading rather than the same words inside the explanatory prose.
+
 ## [0.1.0]
 
 First release.
@@ -55,5 +66,6 @@ First release.
   `env` to disable the prompt.
 - The changed-file list (`d`) and file-level detail are not in this release.
 
-[Unreleased]: https://github.com/AdelysAlberto/pi-click-sidebar/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/AdelysAlberto/pi-click-sidebar/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/AdelysAlberto/pi-click-sidebar/releases/tag/v0.1.1
 [0.1.0]: https://github.com/AdelysAlberto/pi-click-sidebar/releases/tag/v0.1.0
