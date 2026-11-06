@@ -17,11 +17,18 @@ export type SessionInfo = {
   readonly contextPercent: number | null;
 };
 
+/** Action state the panel shows but does not own: who is running and how it ended. */
+export type ActionState = {
+  readonly running: string | null;
+  readonly result: PanelData["result"];
+};
+
 export type ModelInput = {
   readonly snapshot: Snapshot | null;
   readonly error: GitError | null;
   readonly session: SessionInfo;
   readonly stale: boolean;
+  readonly action?: ActionState;
 };
 
 function baseName(absolutePath: string): string {
@@ -51,7 +58,8 @@ export function buildPanelData(input: ModelInput): PanelData {
       changes: null,
       branch: null,
       model,
-      result: null,
+      result: input.action?.result ?? null,
+      running: input.action?.running ?? null,
       stale: input.stale,
       repository: state,
     };
@@ -78,7 +86,8 @@ export function buildPanelData(input: ModelInput): PanelData {
       operation: snapshot.operation,
     },
     model,
-    result: null,
+    result: input.action?.result ?? null,
+    running: input.action?.running ?? null,
     stale: input.stale,
     repository: "ok",
   };

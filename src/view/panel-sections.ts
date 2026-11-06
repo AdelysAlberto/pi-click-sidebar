@@ -54,6 +54,8 @@ export type SectionContext = {
 };
 
 const BRANCH_MAX = 26;
+/** `02-ux-spec.md` §4: success holds its colour for six seconds. */
+const RESULT_HOLD_MS = 6000;
 
 export function heading(theme: Theme, label: string): string {
   return theme.fg("accent", theme.bold(label));
@@ -159,6 +161,10 @@ export function actionsSection(context: SectionContext): Section {
   const { data, theme, row } = context;
   if (data.repository !== "ok") return { name: "actions", lines: [], hits: [] };
 
+  // A verb in flight owns the section: every cell dims and clicks are ignored.
+  const verbStyle = data.running === null ? "text" : "dim";
+  const keyStyle = data.running === null ? "muted" : "dim";
+
   const perRow = 3;
   const lines: string[] = [];
   const hits: SectionHit[] = [];
@@ -171,8 +177,10 @@ export function actionsSection(context: SectionContext): Section {
     for (const cell of cells) {
       const plain = `${cell.key} ${cell.verb}`;
       if (rendered.length > 0) column += 3;
-      rendered.push(`${theme.fg("muted", cell.key)} ${theme.fg("text", cell.verb)}`);
-      hits.push({ rowOffset, start: column, length: plain.length, action: { kind: "verb", verb: cell.verb } });
+      rendered.push(`${theme.fg(keyStyle, cell.key)} ${theme.fg(verbStyle, cell.verb)}`);
+      if (data.running === null) {
+        hits.push({ rowOffset, start: column, length: plain.length, action: { kind: "verb", verb: cell.verb } });
+      }
       column += plain.length;
     }
     lines.push(row(rendered.join("   ")));
@@ -189,12 +197,12 @@ export function resultSection(context: SectionContext): Section {
       hits: [],
     };
   }
-  const style = stylish(theme, data.result?.kind);
-  return {
-    name: "result",
-    lines: [row(data.result === null ? "" : style(data.result.line))],
-    hits: [],
-  };
+  const result = data.result;
+  if (result === null) return { name: "result", lines: [row("")], hits: [] };
+  // A finished result keeps its colour for six seconds and then stays dimmed.
+  const expired = result.at !== undefined && Date.now() - result.at > RESULT_HOLD_MS;
+  const style = expired && result.kind === "ok" ? stylish(theme, undefined) : stylish(theme, result.kind);
+  return { name: "result", lines: [row(style(result.line))], hits: [] };
 }
 
 export function modelSection(context: SectionContext): Section {

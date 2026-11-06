@@ -62,6 +62,8 @@ pi-click-sidebar/                    (repository root = package root)
     │   ├── repo.ts            ~52  toplevel probe, operation markers, short oid
     │   ├── snapshot.ts        ~68  one read of the tree: probe + status + deltas
     │   ├── refs.ts            ~77  branch list, name validation, existence
+    │   ├── switch.ts          ~52  switch / switch -c, dirty guard
+    │   ├── actions.ts        ~190  fetch, pull, push: guards, argv, classification
     │   └── actions.ts        ~150  fetch/pull/push/switch/create + guards
     ├── view/
     │   ├── model.ts           ~85  snapshot + session → PanelData (pure)
@@ -78,6 +80,7 @@ pi-click-sidebar/                    (repository root = package root)
     └── host/
         ├── dock.ts           ~106  probe, HStack wrap, reconcile, restore
         ├── commands.ts        ~56  `/sidebar config` and `/sidebar mode`
+        ├── action-runner.ts  ~130  one verb at a time, progress line, result hold
         ├── present.ts         ~25  pick the host: dock, else overlay
         ├── overlay.ts         ~43  show/hide the panel as an overlay
         ├── refresh.ts        ~111  one timer, shortstat throttle, backoff
@@ -140,7 +143,25 @@ Guards, evaluated in this order before any tree-changing command:
    `cancel` and `continue` where git itself is safe — `switch` and `pull` are refused, `fetch` and
    `push` are not tree-changing and proceed), 4. argv-specific validation (ref format, existence).
 
-`GIT_TERMINAL_PROMPT` cannot be set: `ExecOptions` exposes `signal`, `timeout`, `cwd`, `maxBuffer`
+### Reading git's answer without depending on its language
+
+`ExecOptions` also has no `env`, so `LC_ALL=C` is not available and **git localises its messages**.
+A first implementation read `Already up to date` and `not possible to fast-forward` out of stderr and
+silently broke on a Spanish machine: the fetch detail came back as `Desde /tmp/origin.git`. Three
+decisions remove that dependency:
+
+| Question | How it is answered now |
+|---|---|
+| Did the branch diverge? | From the graph: `branch.ab` ahead > 0 **and** behind > 0 → `diverged`, before any network call |
+| Did the pull move HEAD? | `rev-parse HEAD` before and after; unchanged means `up to date`, changed means `fast-forward` |
+| What did the fetch do? | The ref-update line `a1b2c3d..e4f5a6b main -> origin/main`, reduced to `main → origin/main`: hashes and arrows are the same in every locale |
+
+`classifyFailure` keeps the English markers as a fallback for the paths that only exist after the
+command runs (a protected branch, a missing credential). When none matches, the code is `unknown` and
+git's own first line is kept as the detail, which may be localised: that is honest and readable for the
+operator, and the verb prefix stays in the copy deck.
+
+`GIT_TERMINAL_PROMPT` cannot be set either: `ExecOptions` exposes `signal`, `timeout`, `cwd`, `maxBuffer`
 (`dist/core/exec.d.ts:7-19`) and no `env`. A push over HTTPS with no stored credential will block
 until the 60 s timeout and report `timeout`. The README says: use an SSH remote, or authenticate with a
 credential helper.

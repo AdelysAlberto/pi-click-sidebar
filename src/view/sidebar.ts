@@ -56,7 +56,9 @@ export type PanelData = {
   readonly changes: ChangeSummary | null;
   readonly branch: BranchSummary | null;
   readonly model: ModelSummary;
-  readonly result: { readonly kind: ResultKind; readonly line: string } | null;
+  readonly result: { readonly kind: ResultKind; readonly line: string; readonly at?: number } | null;
+  /** The verb in flight, when one is: the verb row dims and a second run is refused. */
+  readonly running: string | null;
   readonly stale: boolean;
   /** `none` renders the project plus one dim line; there is nothing else to show. */
   readonly repository: RepositoryState;

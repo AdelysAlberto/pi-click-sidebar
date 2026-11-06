@@ -21,6 +21,7 @@ import type { HitAction } from "../src/view/hits.ts";
 import type { PanelCommand } from "../src/view/keymap.ts";
 import { NO_MODEL } from "../src/view/copy.ts";
 import { buildPanelData, type SessionInfo } from "../src/view/model.ts";
+import { createActionRunner } from "../src/host/action-runner.ts";
 import type { PanelData } from "../src/view/sidebar.ts";
 
 const COMMAND = "sidebar";
@@ -34,6 +35,7 @@ export default function clickSidebar(pi: ExtensionAPI): void {
   let lastTheme: Theme | undefined;
   /** `/sidebar mode` forces a surface for this session; the file stays the SSOT. */
   let modeOverride: Mode | undefined;
+
   let session: SessionInfo = { cwd: ".", modelId: NO_MODEL, thinking: "off", contextPercent: null };
   let stale = false;
 
@@ -44,6 +46,10 @@ export default function clickSidebar(pi: ExtensionAPI): void {
     if (command === "refresh") {
       refresher?.markDirty();
       void refresher?.refreshNow().then(() => presenter.repaint());
+      return;
+    }
+    if (command === "fetch" || command === "pull" || command === "push") {
+      void runner.run(command);
       return;
     }
     const unavailable = describeUnavailable(command);
@@ -116,13 +122,25 @@ export default function clickSidebar(pi: ExtensionAPI): void {
       includeShortstat,
     });
     const next = result.ok
-      ? buildPanelData({ snapshot: result.value, error: null, session, stale: false })
-      : buildPanelData({ snapshot: null, error: result.error, session, stale });
+      ? buildPanelData({ snapshot: result.value, error: null, session, stale: false, action: runner.state() })
+      : buildPanelData({ snapshot: null, error: result.error, session, stale, action: runner.state() });
     stale = !result.ok;
     return next;
   };
 
-  const initialData = (): PanelData => buildPanelData({ snapshot: null, error: null, session, stale: false });
+  const initialData = (): PanelData =>
+    buildPanelData({ snapshot: null, error: null, session, stale: false, action: runner.state() });
+
+  const runner = createActionRunner({
+    git,
+    ctx: () => activeCtx,
+    config: () => cached?.config ?? DEFAULT_CONFIG,
+    session: () => session,
+    repaint: () => presenter.repaint(),
+    refresh: async () => {
+      await refresher?.refreshNow();
+    },
+  });
 
   const openPanel = async (ctx: ExtensionContext): Promise<void> => {
     const settings = config(ctx).config;
@@ -193,6 +211,7 @@ export default function clickSidebar(pi: ExtensionAPI): void {
   pi.on("session_shutdown", async (_event, ctx) => {
     presenter.release();
     presenter.unmountRail(ctx);
+    runner.dispose();
     refresher?.dispose();
     refresher = undefined;
     activeCtx = undefined;

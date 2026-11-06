@@ -215,6 +215,21 @@ git -C <repo> status --porcelain; git -C <repo> rev-parse HEAD   # before and af
 node --test "src/**/*.test.ts"
 ```
 
+**Result (2026-11-06): done**, against a local bare remote (no network needed except for the timeout case).
+
+| Criterion | Observed |
+|---|---|
+| `fetch` on a clean tree reports one success line | `✓ fetch · main → origin/main · 0.6s`, and `origin/main` moved to the same commit a manual `git fetch` produced |
+| `pull --ff-only` on a diverged branch | `✗ pull · diverged, fast-forward not possible`; `HEAD` unchanged (`a0e33d7…`) and `git status` byte-identical |
+| dirty tree refuses | `✗ pull · 1 uncommitted file`, `git stash list` empty, the file still there |
+| `push` asks before `-u origin <branch>` | dialog `No upstream branch. Push with -u origin feat/noupstream?`; cancel → `✗ push · cancelled, nothing was pushed` and no remote branch; accept → `✓ push · origin/feat/noupstream` and `git branch -vv` shows the upstream. No `--force` in any argv |
+| network failure surfaces in time | origin pointed at an unroutable host with `timeouts.network` 4000 → `✗ fetch · timed out after 4s`, no hang |
+| a running action blocks a second one | second `f` while fetching → notice `fetch is still running`, verbs dimmed and unhittable |
+
+Two corrections the slice forced, both in the architecture: divergence is decided from `ahead`/`behind`
+instead of git's prose, and `up to date`/`fast-forward` from comparing `HEAD`, because git localises its
+messages and `exec` has no `env` to force `LC_ALL`.
+
 ## S6 — Branch modal
 
 `view/branch-modal.ts`: base list (current pre-selected), name input, validation, switch/create,
