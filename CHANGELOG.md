@@ -6,6 +6,20 @@ gate, commits and tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The keyboard.** With the dock focused, keys the panel did not bind were dropped, so typing disappeared
+  and the app looked frozen. Printable keys now reach the editor and focus comes back with them. The frame
+  turns `borderAccent` when the panel holds the keyboard and shows `alt+g focus` when it does not.
+- **A verb that would not stop.** `git fetch` to a remote that does not answer blocks for the whole network
+  timeout; `esc` now cancels it, the progress line repaints once per second instead of five times, and a
+  cancelled command reports `cancelled` instead of pretending it timed out.
+- **A cancellation race.** A cancel arriving before the network command started was lost, because the abort
+  listener was attached after the signal had fired. `exec.ts` refuses to spawn an already-cancelled command.
+- **The branch modal's buttons.** The button row index was measured after the hint row, so clicks landed one
+  row off and the hint row submitted. `tab` now cycles the base list, the name field and the buttons;
+  `left`/`right` picks a button, the armed one is drawn inverse, both are clickable, and the hints fit.
+
 ## [0.1.1] - 2026-11-06
 
 ### Fixed
