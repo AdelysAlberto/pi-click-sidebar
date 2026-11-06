@@ -34,6 +34,7 @@ extensions/click-sidebar.ts        wiring: flags, command, shortcut, session_sta
 ```text
 pi-click-sidebar/                    (repository root = package root)
 ├── package.json                    name, version, pi manifest, peerDependencies
+├── package-lock.json               dev-only toolchain, so the gate is reproducible
 ├── tsconfig.json                   strict, noUncheckedIndexedAccess
 ├── README.md                       install, keys, modes, limits
 ├── CHANGELOG.md                    keep-a-changelog headings (pi reads it)
@@ -52,8 +53,9 @@ pi-click-sidebar/                    (repository root = package root)
 ├── extensions/
 │   └── click-sidebar.ts       ~90  entry point, no logic
 └── src/
-    ├── config.ts              ~80  defaults, read/validate, atomic write
-    ├── result.ts              ~40  Result helpers
+    ├── config.ts             ~230  defaults, read/validate, atomic write, describe
+    ├── config.test.ts         ~99  defaults, clamping, corruption, first-run creation
+    ├── result.ts              ~50  Result helpers
     ├── git/
     │   ├── exec.ts            ~70  runGit(): argv, timeout, killed→timeout, code
     │   ├── status.ts         ~140  porcelain-v2 parser (pure) + repo probe
@@ -61,13 +63,15 @@ pi-click-sidebar/                    (repository root = package root)
     │   └── actions.ts        ~150  fetch/pull/push/switch/create + guards
     ├── view/
     │   ├── model.ts          ~120  status + session → ViewModel (pure)
-    │   ├── copy.ts            ~70  every user-visible string
-    │   ├── sidebar.ts        ~200  dock/overlay component
+    │   ├── copy.ts            ~73  every user-visible string
+    │   ├── text.ts            ~52  visibleWidth helpers: ellipsis, padding, spread
+    │   ├── sidebar.ts        ~211  dock/overlay component
     │   ├── rail.ts            ~80  one-line widget (regular mode)
     │   └── branch-modal.ts   ~150  select + input overlay
     └── host/
         ├── dock.ts           ~120  probe, wrap, reconcile
-        ├── overlay.ts         ~70  show/hide the panel as an overlay
+        ├── present.ts         ~25  pick the host: dock, else overlay
+        ├── overlay.ts         ~43  show/hide the panel as an overlay
         ├── refresh.ts         ~90  timer, backoff, event wiring
         └── keymap.ts          ~50  focus and verb dispatch
 ```
@@ -241,7 +245,7 @@ slice gates cover them by hand).
 | `git/status.test.ts` | clean repo; 2 modified + 1 untracked; staged-only; deleted; renamed (`2 ...`); unmerged (`u ...`); detached header; no upstream; ahead/behind values |
 | `view/model.test.ts` | width 28/34/44 line budgets; middle-ellipsis of a long path; branch right-ellipsis at 26; number formatting (`0`, `999`, `12.4k`, `1.2M`); stale marker; every `GitErrorCode` produces a result line |
 | `view/copy.test.ts` | no string contains a newline or a tab; every key used by the model exists |
-| `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults |
+| `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults; first-run creation; `PI_CODING_AGENT_DIR` resolution |
 
 ## 10. Package manifest
 
@@ -262,7 +266,7 @@ slice gates cover them by hand).
     "@earendil-works/pi-tui": "*"
   },
   "scripts": {
-    "test": "node --test src",
+    "test": "node --test \"src/**/*.test.ts\"",
     "check": "tsc --noEmit"
   },
   "devDependencies": {

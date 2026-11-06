@@ -56,7 +56,7 @@ persisted visibility per session, `visible(w,h)` guard, and the rail promoted to
 ## S1 — Package skeleton
 
 `package.json` (manifest from `03-architecture.md` §10), `tsconfig.json`, `themes/click-sidebar-cyber.json`
-(dark.json copy with `accent`/`borderAccent` = `okhsl(190 95% 55%)`), `src/config.ts`, `src/result.ts`,
+(dark.json copy with `accent`/`borderAccent` = `okhsl(212 96% 76%)`, the literal that resolves to electric cyan `#20d2ed`; the earlier `okhsl(190 95% 55%)` measured `#109792`, a teal), `src/config.ts`, `src/result.ts`,
 `extensions/click-sidebar.ts` wiring a `/sidebar` command that renders a **static** panel through
 `host/overlay.ts`.
 
@@ -66,12 +66,24 @@ persisted visibility per session, `visible(w,h)` guard, and the rail promoted to
   panel; `esc` closes it.
 - Config file is created on first run with defaults; a corrupted file falls back and warns once.
 - `click-sidebar-cyber` appears in `/settings → Theme` and selecting it turns the dock accents cyan.
-- `npx tsc --noEmit` and `node --test src` exit 0.
+- `npx tsc --noEmit` and `node --test "src/**/*.test.ts"` exit 0.
+
+**Result (2026-11-06): done.** Observed from a captured frame at 160×45: the panel draws top-right at 36
+columns with the header, PROJECT (name plus middle-ellipsised path), CHANGES, the action rows, an empty
+result slot and MODEL filled from the live session; `esc` closes it; no `click-sidebar` warning appears on
+a healthy config. A corrupted config produced exactly one `Warning:` line and the defaults, and
+`/sidebar config` printed the path plus four value lines. `click-sidebar-cyber` showed up in
+`/settings → Theme` with `pi -e .`, and selecting it moved the accent run to `38;2;32;210;237` (`#20d2ed`).
+
+Three deviations, all recorded where they belong: the accent literal in this slice was wrong (see
+`02-ux-spec.md` §8); the gate command `node --test src` does not walk a directory on Node 24 (see
+`AGENTS.md` §0); and the config dump is one newline-joined notification because Pi replaces a status line
+when another info notification follows it, which would have left only the last line visible.
 
 **Verification**
 
 ```bash
-npx tsc --noEmit && node --test src
+npx tsc --noEmit && node --test "src/**/*.test.ts"
 pi -e .      # then: /sidebar, /settings, /reload
 ```
 
@@ -94,7 +106,7 @@ pi -e .      # then: /sidebar, /settings, /reload
 **Verification**
 
 ```bash
-node --test src && npx tsc --noEmit
+node --test "src/**/*.test.ts" && npx tsc --noEmit
 cd <any-repo> && time git status --porcelain=v2 --branch >/dev/null
 ```
 
@@ -159,7 +171,7 @@ non-obvious cases (dirty tree with `push`, no upstream with `push`).
 
 ```bash
 git -C <repo> status --porcelain; git -C <repo> rev-parse HEAD   # before and after each guard test
-node --test src
+node --test "src/**/*.test.ts"
 ```
 
 ## S6 — Branch modal

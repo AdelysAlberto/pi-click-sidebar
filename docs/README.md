@@ -18,11 +18,14 @@ Repository: `https://github.com/AdelysAlberto/pi-click-sidebar`.
 
 ## Status
 
-`S0 done, S1 next`. `01-feasibility.md` §6 answered the one question it exists for: the host layout root
-**can** be wrapped in an `HStack`, so dock mode is the primary shape and `S4` is a real dock, not the
-overlay-only fallback. All four pass criteria are observed, including the `tuiMode` round trip. Evidence
-and the four design corrections the spike produced are in `01-feasibility.md` §6.1–6.2. No package code
-exists yet; `04-plan.md` S1 is the next slice.
+`S0 and S1 done, S2 next`. `01-feasibility.md` §6 answered the one question it exists for: the host layout
+root **can** be wrapped in an `HStack`, so dock mode is the primary shape and `S4` is a real dock, not the
+overlay-only fallback. All four pass criteria are observed, including the `tuiMode` round trip.
+
+S1 ships the package skeleton: manifest, strict TypeScript, config with runtime validation and atomic
+first-run creation, the bundled `click-sidebar-cyber` theme, and a `/sidebar` command that draws the panel
+as an overlay. The panel is fed from the session only (project and model); the git sections show `—` until
+S2 wires the read layer. Slice results and deviations live in `04-plan.md`.
 
 ## Documents
 

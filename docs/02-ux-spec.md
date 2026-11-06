@@ -218,7 +218,7 @@ and a colleague on `system` still gets a readable dock.
 
 | Token | Used for | Bundled theme value |
 |---|---|---|
-| `accent` | Section titles, focused verb, dock border | `okhsl(190 95% 55%)` (electric cyan, ≈ `#22d3ee`) |
+| `accent` | Section titles, focused verb | `okhsl(212 96% 76%)`, which Pi's parser resolves to `#20d2ed` (electric cyan) |
 | `borderAccent` | Focused border | same cyan |
 | `border` / `borderMuted` | Dock frame, separators | inherited from `dark.json` |
 | `text` | Values (branch name bold, counts) | `okhsl(234 3% 89%)` |
@@ -230,6 +230,10 @@ and a colleague on `system` still gets a readable dock.
 
 Rules:
 
+- The literal above is the one that actually produces electric cyan. `okhsl(190 95% 55%)`, the value
+  this document asked for originally, resolves to `#109792` through Pi's own `parseColor` (verified with
+  `colorToHex(parseColor("okhsl(190 95% 55%)"))`): a muted teal, not cyan. OKHSL hue 190 is not the same
+  hue as an OKLCH 190, and `#22d3ee` measures `okhsl(212 96% 76%)`, so the theme uses that literal.
 - Cyan is an **accent**, never a background. `.style(text, {bg})` is used only for the focused verb cell
   with `selectedBg`, so the dock stays flat.
 - On the `light` theme the same tokens resolve to darker variants automatically; nothing in the render

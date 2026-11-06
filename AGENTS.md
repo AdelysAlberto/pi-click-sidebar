@@ -9,9 +9,13 @@
 Run before declaring a task done and paste the real output:
 
 ```bash
-npx tsc --noEmit            # must exit 0, strict, noUncheckedIndexedAccess
-node --test src             # must exit 0
+npx tsc --noEmit                 # must exit 0, strict, noUncheckedIndexedAccess
+node --test "src/**/*.test.ts"   # must exit 0
 ```
+
+The test runner takes a glob, not a directory: on Node 24.22.1 `node --test src` tries to execute `src`
+as a module and fails with `MODULE_NOT_FOUND` (verified in isolation with a directory holding one
+`*.test.js`). `node --test "src/**/*.test.ts"` collects the suites and exits 0.
 
 Slice-level gates live in `docs/04-plan.md`. A slice is done when its acceptance criteria are observed
 in a live `pi -e .` session; unit tests alone do not satisfy them.

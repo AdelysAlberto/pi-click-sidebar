@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pi-click-sidebar configuration",
+  "description": "Validation aid for <agent-dir>/pi-click-sidebar.json. The extension enforces the same rules at runtime (src/config.ts): a missing field keeps its default, an out-of-range number is clamped, and an unknown key is reported once and ignored. The file carries no $schema key until this repository publishes the schema at a stable URL.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "description": "auto follows the dock probe; off loads the extension and does nothing.",
+      "enum": ["auto", "dock", "overlay", "rail", "off"],
+      "default": "auto"
+    },
+    "dockWidth": {
+      "description": "Fixed lane width in columns.",
+      "type": "integer",
+      "minimum": 24,
+      "maximum": 48,
+      "default": 34
+    },
+    "dockMinTerminalWidth": {
+      "description": "Below this terminal width the dock hides and the rail takes over.",
+      "type": "integer",
+      "minimum": 80,
+      "maximum": 200,
+      "default": 96
+    },
+    "refreshIntervalMs": {
+      "description": "Refresh tick period.",
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 30000,
+      "default": 3000
+    },
+    "shortstatEveryNTicks": {
+      "description": "Throttle for `git diff --shortstat HEAD`.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 3
+    },
+    "showFileList": {
+      "description": "Start with the changed-file section expanded.",
+      "type": "boolean",
+      "default": false
+    },
+    "accentOverride": {
+      "description": "Forces a concrete accent, bypassing the theme. Documented contrast risk.",
+      "type": ["string", "null"],
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "default": null
+    },
+    "timeouts": {
+      "description": "Per class of command, in milliseconds.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "read": { "type": "integer", "minimum": 500, "maximum": 120000, "default": 3000 },
+        "network": { "type": "integer", "minimum": 1000, "maximum": 600000, "default": 60000 },
+        "tree": { "type": "integer", "minimum": 1000, "maximum": 120000, "default": 15000 }
+      }
+    }
+  }
+}
