@@ -20,9 +20,9 @@ Repository: `https://github.com/AdelysAlberto/pi-click-sidebar`.
 
 `S0 done, S1 next`. `01-feasibility.md` §6 answered the one question it exists for: the host layout root
 **can** be wrapped in an `HStack`, so dock mode is the primary shape and `S4` is a real dock, not the
-overlay-only fallback. Evidence, the one criterion that still needs a human terminal, and four design
-corrections the spike produced are in `01-feasibility.md` §6.1–6.2. No package code exists yet;
-`04-plan.md` S1 is the next slice.
+overlay-only fallback. All four pass criteria are observed, including the `tuiMode` round trip. Evidence
+and the four design corrections the spike produced are in `01-feasibility.md` §6.1–6.2. No package code
+exists yet; `04-plan.md` S1 is the next slice.
 
 ## Documents
 

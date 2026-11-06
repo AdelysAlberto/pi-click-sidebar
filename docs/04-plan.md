@@ -33,11 +33,11 @@ Throwaway extension, ≤80 lines, no git code. Executes `01-feasibility.md` §6.
 **Acceptance:** the four pass criteria in `01-feasibility.md` §6 observed live, and the result appended
 to that document (pass, or fail with the observed frame evidence).
 
-**Result (2026-11-06): PASS.** Criteria 1–3 observed from captured frames at 160×45 and 80×30; criterion
-4's `tuiMode` round trip is `NOT_RUN` (the `/settings` value could not be cycled from a scripted pty) and
-stays with the operator's live session. Evidence table, the measured wrapper-loss/reconcile sequence and
-four design corrections: `01-feasibility.md` §6.1–6.2. Dock mode is therefore supported; `S4′` is not
-needed.
+**Result (2026-11-06): PASS, four of four criteria.** Observed from captured frames at 160×45 and 80×30,
+plus the `fullscreen → regular → fullscreen` round trip through `/settings` (status line, the TUI
+reference's own `mode` reading, and the lane returning). Evidence table, the measured
+wrapper-loss/reconcile sequence and four design corrections: `01-feasibility.md` §6.1–6.2. Dock mode is
+supported; `S4′` is not needed.
 
 **Verification**
 

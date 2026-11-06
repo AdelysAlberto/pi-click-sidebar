@@ -144,7 +144,7 @@ Fail → **abort dock mode**, keep `overlay` + `rail`. Then `docs/settings.md:97
 (`fullscreen`) still gives the requested data through `02-ux-spec.md` §2.2. A failure here must be
 reported as a finding, not worked around with a hack per Pi version.
 
-### 6.1 Result — S0 executed 2026-11-06: **PASS** (criterion 4 partially observed)
+### 6.1 Result — S0 executed 2026-11-06: **PASS** (four of four)
 
 Environment: Pi `1.5.0` (`~/.pi/agent/install/releases/1.5.0`), Node `v24.22.1`, macOS, terminal driven
 through a pty of a fixed size so the frames are reproducible. Spike: `.spike/index.ts`, 79 lines,
@@ -156,10 +156,13 @@ first run was cross-checked against `PI_TUI_WRITE_LOG=/tmp/pi-spike.log`, which 
 | 1 | No transcript glyph inside the lane columns | **PASS** | 160×45: host root renders columns 0–129, lane 130–159. The lane band is an unbroken 30-column block on every row it owns; the only non-block glyphs inside it are the lane's own `#n w h` header. |
 | 2 | Resize 80 → 160 keeps both lanes coherent | **PASS** | 80×30: host 0–49, lane 50–79, header `#2 w=30 h=30`. Back to 160×45: host 0–129, lane 130–159, header `#3 w=30 h=45`. Widths re-allocate on the same frame as the resize. |
 | 3 | `/settings` opens and closes without dropping the lane | **PASS** | `#4` while `/settings` is open (inline list in the editor area), `#5` after `esc`; lane 130–159 in both. `/model` selector: `#7` open, `#8` closed, same geometry. |
-| 4 | Switching `tuiMode` keeps the lane or falls back cleanly | **PARTIAL — see below** | The value could not be cycled from a scripted pty (see the note), so the round trip itself is **NOT_RUN**. The mechanism it exercises *was* measured: the host re-asserting its own layout root discards the wrapper, and the reconcile tick re-applies it. |
+| 4 | Switching `tuiMode` keeps the lane or falls back cleanly | **PASS** | `fullscreen → regular`: host status line `TUI mode: regular`, then the extension reads `mode=regular` from the TUI reference and `setLayoutRoot` is absent, so the lane stops without an error. `regular → fullscreen`: status `TUI mode: fullscreen` and the lane comes back as frame `#4`/`#5`. |
 
-Criterion 4, measured at the call the host makes on every `tuiMode` switch
-(`interactive-mode.js:610` `setLayoutRoot(this.fullscreenLayoutRoot)`, `:647` `setLayoutRoot(undefined)`):
+Criterion 4 traverses two paths. The switch arrives through `/settings` → `TUI mode`
+(`values: ["regular", "fullscreen"]`, cycled by `enter`), and the host then rebuilds the renderer
+(`switchTuiMode` `interactive-mode.js:628`, new `createInteractiveTui` at `:638`, `mountInteractiveTui`
+at `:660`). The wrapper does not survive that: it lives on the old renderer object. Measured at the exact
+call the host makes on mount and on every switch (`:610` `setLayoutRoot(this.fullscreenLayoutRoot)`):
 
 | Phase | Transcript scrollbar column | Lane 130–159 | Lane frame |
 |---|---|---|---|
@@ -168,12 +171,17 @@ Criterion 4, measured at the call the host makes on every `tuiMode` switch
 | next reconcile tick (+1.2 s) | 129 | present | `#2` |
 
 So the wrapper is genuinely fragile and the reconcile loop is genuinely required; the visual gap equals
-the reconcile period, which in the product is the existing refresh tick, not a second timer.
+the reconcile period, which in the product is the existing refresh tick, not a second timer. In regular
+mode `getMountedRoots()` still answers (it returns `children`, `tui-alt-screen.js:153`) but
+`setLayoutRoot` does not exist on `TuiMainScreen`, which is why the probe tests both symbols and why the
+degradation is a single warning rather than an exception into the session loop.
 
-**Why the `tuiMode` round trip is not observed here.** `/settings` lists `TUI mode` as
-`fullscreen | regular`, but neither `enter` nor `space` cycled the value from a scripted pty; the list
-kept showing `fullscreen`. The literal switch therefore needs a human terminal
-(`docs/04-plan.md` S4 acceptance). The mechanism behind it is already covered by the table above.
+**Correction (same session).** The first pass recorded criterion 4 as `NOT_RUN`, judging it from replayed
+frames in which the lane appeared to stay. The frames were wrong: after a switch to regular mode the host
+writes line by line into the terminal scrollback without clearing the alt screen, and the replay kept the
+stale lane pixels. The `TUI mode: regular` status line and the extension's own read of `mode=regular`
+through the TUI reference are independent of the replay and prove the switch happened. Judge a mode
+switch by the status line and the lane frame counter, never by leftover pixels.
 
 ### 6.2 Findings that change the design (verified, not inferred)
 
