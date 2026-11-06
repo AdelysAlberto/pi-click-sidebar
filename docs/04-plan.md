@@ -17,7 +17,7 @@ changes, model, actions) before the risky layout work starts.
 
 | # | Slice | Est. | Blocks |
 |---|---|---|---|
-| S0 | `SPIKE-DOCK` feasibility | 1 h | S4 |
+| S0 | `SPIKE-DOCK` feasibility | 1 h | S4 (done, PASS: `01-feasibility.md` §6.1) |
 | S1 | Package skeleton, config, theme, static panel | 2 h | S2–S7 |
 | S2 | Git read layer + parser + ViewModel + tests | 3 h | S3–S6 |
 | S3 | Rail (regular mode) + keymap | 2 h | — |
@@ -32,6 +32,12 @@ Throwaway extension, ≤80 lines, no git code. Executes `01-feasibility.md` §6.
 
 **Acceptance:** the four pass criteria in `01-feasibility.md` §6 observed live, and the result appended
 to that document (pass, or fail with the observed frame evidence).
+
+**Result (2026-11-06): PASS.** Criteria 1–3 observed from captured frames at 160×45 and 80×30; criterion
+4's `tuiMode` round trip is `NOT_RUN` (the `/settings` value could not be cycled from a scripted pty) and
+stays with the operator's live session. Evidence table, the measured wrapper-loss/reconcile sequence and
+four design corrections: `01-feasibility.md` §6.1–6.2. Dock mode is therefore supported; `S4′` is not
+needed.
 
 **Verification**
 

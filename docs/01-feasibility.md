@@ -3,7 +3,7 @@ title: "Pi Click Sidebar 01 — Feasibility, evidence and abort criteria"
 module: "pi-click-sidebar host integration"
 author: "pi (architecture)"
 date: 2026-11-06
-status: Pending
+status: Done
 priority: P1
 scope: "[Backlog]"
 source: "docs/README.md"
@@ -56,7 +56,7 @@ the transcript to nothing.
 | Cost | Evidence | Mitigation |
 |---|---|---|
 | The host's root is not an extension-facing value. Reaching it needs `getMountedRoots()`, declared `protected` (`pi-tui/dist/tui.d.ts:324`), through a cast. | `tui.d.ts:324`, `tui-alt-screen.js:153` | Isolate in one module with a runtime capability probe; the rest of the package never sees the cast. |
-| The host re-asserts `setLayoutRoot` on its own schedule and would silently discard the wrapper. | `interactive-mode.js:616` (mount), `:647` (`setLayoutRoot(undefined)` on mode switch), `:664` and `:709` (remounts) | Reconcile: after every wrap check `tui.getMountedRoots()[0] === wrapped`, and re-wrap when it is not. Runs on the existing refresh tick, not a second timer. |
+| The host re-asserts `setLayoutRoot` on its own schedule and would silently discard the wrapper. | `interactive-mode.js:616` (mount), `:647` (`setLayoutRoot(undefined)` on mode switch), `:664` and `:709` (remounts); measured in §6.1 | Reconcile: after every wrap check `tui.getMountedRoots()[0] === wrapped`, and re-wrap when it is not. Runs on the existing refresh tick, not a second timer. |
 | Fullscreen only. `TuiMainScreen` (regular mode) renders `children` vertically; there is no layout root and no horizontal axis. | `tui-alt-screen.js:143` vs `tui.js` `TuiBase`; `chat-viewport.js` is used only by the viewport layout | Fallback mode (§5). Default `tuiMode` is `fullscreen` (`docs/settings.md:97`), so this hits the common case. |
 | Pi upgrade can move the symbols. | — | `engines`-style warning + soft failure: if the probe fails, the extension keeps working in fallback mode and says so once. Never crash the session. |
 
@@ -143,6 +143,71 @@ Pass criteria (all four, observed by eye **and** by `PI_TUI_WRITE_LOG` capture):
 Fail → **abort dock mode**, keep `overlay` + `rail`. Then `docs/settings.md:97`'s default
 (`fullscreen`) still gives the requested data through `02-ux-spec.md` §2.2. A failure here must be
 reported as a finding, not worked around with a hack per Pi version.
+
+### 6.1 Result — S0 executed 2026-11-06: **PASS** (criterion 4 partially observed)
+
+Environment: Pi `1.5.0` (`~/.pi/agent/install/releases/1.5.0`), Node `v24.22.1`, macOS, terminal driven
+through a pty of a fixed size so the frames are reproducible. Spike: `.spike/index.ts`, 79 lines,
+gitignored, no git code. Capture: raw pty byte stream, replayed into a screen snapshot per phase; the
+first run was cross-checked against `PI_TUI_WRITE_LOG=/tmp/pi-spike.log`, which showed the same geometry.
+
+| # | Criterion (`§6`) | Result | Evidence in the captured frames |
+|---|---|---|---|
+| 1 | No transcript glyph inside the lane columns | **PASS** | 160×45: host root renders columns 0–129, lane 130–159. The lane band is an unbroken 30-column block on every row it owns; the only non-block glyphs inside it are the lane's own `#n w h` header. |
+| 2 | Resize 80 → 160 keeps both lanes coherent | **PASS** | 80×30: host 0–49, lane 50–79, header `#2 w=30 h=30`. Back to 160×45: host 0–129, lane 130–159, header `#3 w=30 h=45`. Widths re-allocate on the same frame as the resize. |
+| 3 | `/settings` opens and closes without dropping the lane | **PASS** | `#4` while `/settings` is open (inline list in the editor area), `#5` after `esc`; lane 130–159 in both. `/model` selector: `#7` open, `#8` closed, same geometry. |
+| 4 | Switching `tuiMode` keeps the lane or falls back cleanly | **PARTIAL — see below** | The value could not be cycled from a scripted pty (see the note), so the round trip itself is **NOT_RUN**. The mechanism it exercises *was* measured: the host re-asserting its own layout root discards the wrapper, and the reconcile tick re-applies it. |
+
+Criterion 4, measured at the call the host makes on every `tuiMode` switch
+(`interactive-mode.js:610` `setLayoutRoot(this.fullscreenLayoutRoot)`, `:647` `setLayoutRoot(undefined)`):
+
+| Phase | Transcript scrollbar column | Lane 130–159 | Lane frame |
+|---|---|---|---|
+| wrapped | 129 | present | `#1` |
+| host re-asserted its root (+0.35 s) | 159 → transcript full width | gone | — |
+| next reconcile tick (+1.2 s) | 129 | present | `#2` |
+
+So the wrapper is genuinely fragile and the reconcile loop is genuinely required; the visual gap equals
+the reconcile period, which in the product is the existing refresh tick, not a second timer.
+
+**Why the `tuiMode` round trip is not observed here.** `/settings` lists `TUI mode` as
+`fullscreen | regular`, but neither `enter` nor `space` cycled the value from a scripted pty; the list
+kept showing `fullscreen`. The literal switch therefore needs a human terminal
+(`docs/04-plan.md` S4 acceptance). The mechanism behind it is already covered by the table above.
+
+### 6.2 Findings that change the design (verified, not inferred)
+
+1. **The extension receives a stable TUI reference, not the renderer.** The widget factory is called as
+   `content(this.ui, theme)`, and `this.ui` is `createInteractiveTuiReference(() => this.renderer)`, a
+   `Proxy` that resolves every property against the *current* renderer and re-binds `this` per call
+   (`interactive-mode.js:386`, `dist/modes/interactive/tui-renderer.js:44-77`). Consequence for
+   `host/dock.ts`: the extension never has to rediscover the TUI after `switchTuiMode` — one reference
+   held from the first `setWidget` keeps addressing the live renderer, including its new layout root.
+   Reconciliation therefore only has to compare `getMountedRoots()[0]` with the wrapper.
+2. **Wrapper loss is guaranteed, not hypothetical.** Every `mountInteractiveTui` re-asserts the host
+   root, and `switchTuiMode` builds a **new** renderer object (`interactive-mode.js:638`). The wrapped
+   `HStack` lives on the old one, so a mode switch drops the lane in one frame (measured above).
+3. **A component is never told the height.** `render(width)` is the whole contract; the only place the
+   viewport height appears is `visible(viewport)` on the stack entry, which is called during layout with
+   `{width, height}` (`layout.js` `visibleStackEntries(node.entries, context.viewport)`). A lane that
+   derives its height from `process.stdout.rows` is wrong twice: the value is `0` on a pty whose size was
+   not set (the first spike attempt drew exactly one lane row), and it ignores the host's own row budget.
+   `view/dock.ts` must size the lane from the captured viewport.
+4. **A numeric `basis` avoids a second transcript render.** `layoutComponent` measures intrinsic width
+   only when `entry.basis` is not a number, so a fixed-width lane costs one host render per frame
+   instead of two (one to measure at full width, one at the allocated width).
+
+Reproduction (throwaway, never committed):
+
+```bash
+# .spike/index.ts, 79 lines, answers the four criteria in §6
+pi -e .spike                       # interactive: the operator's eyeball check
+SPIKE_REASSERT=1 pi -e .spike      # + the host re-assert simulation used in the table above
+```
+
+The `PI_TUI_WRITE_LOG` route stays the documented one for `S4`; the captures above came from a pty
+stream because the scripted run needs a *known* terminal size and a mid-session resize, and a
+`PI_TUI_WRITE_LOG` frame does not carry its own dimensions.
 
 ## 7. Constraints carried into the design
 
