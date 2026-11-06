@@ -281,6 +281,7 @@ slice gates cover them by hand).
 | `view/rail.test.ts` | the truncation ladder at 160/80/30 columns; the path keeps its last segment; no width produces an over-wide line |
 | `view/keymap.test.ts` | every documented key resolves; unknown input returns `null` so the editor keeps it |
 | `view/surface.test.ts` | the surface decision for every mode, width and probe outcome, including each fallback |
+| `host/dock.test.ts` | a fake viewport TUI: the probe rejects regular mode, the wrap puts one lane at the configured width, reconcile re-wraps after a re-assert without doubling it, restore is idempotent |
 | `view/hits.test.ts` | a click inside a region reports its action; borders, padding, the wrong row and stale rows do not |
 | `view/branch-modal.test.ts` | the submit plan: switch, create, dirty-tree block, and every invalid name with its exact reason |
 | `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults; first-run creation; `PI_CODING_AGENT_DIR` resolution |

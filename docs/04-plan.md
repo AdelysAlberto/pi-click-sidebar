@@ -192,6 +192,12 @@ Deviations recorded: the lane width is `config.dockWidth` capped by the terminal
 in `02-ux-spec.md` §3, and the command handler moved to `host/commands.ts` when the entry point reached the
 250-line ceiling.
 
+**Correction after S7.** Running `/sidebar mode auto` in fullscreen drew **two** lanes: the command re-mounts
+the surface, and a second `mountDock` wrapped the existing wrapper. `presenter.mountDock` is now idempotent —
+a second call reconciles instead of wrapping — and `host/dock.test.ts` asserts one lane, one host root, a
+re-wrap after a re-assert, and an idempotent restore against a fake viewport TUI. Re-verified live: one
+`PROJECT` column and `surface dock`.
+
 ## S5 — Write actions
 
 `git/actions.ts`: `fetch`, `pull`, `push`, guard chain, result line, confirm dialogs for the two

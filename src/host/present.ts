@@ -152,6 +152,12 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
 
     mountDock(tui: unknown, read: () => PanelData): boolean {
       tuiHost = tui;
+      // Mounting twice would wrap the wrapper and draw two lanes; the second
+      // call only has to make sure the existing one is still in place.
+      if (dock !== null) {
+        dock.reconcile();
+        return true;
+      }
       const theme = options.getTheme();
       const handle = mountDock(tui, {
         laneWidth: options.config().dockWidth,
