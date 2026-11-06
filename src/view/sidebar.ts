@@ -7,7 +7,8 @@
  * and actions, Result, Model. Nothing reorders under the cursor.
  */
 import type { Component } from "@earendil-works/pi-tui";
-import { Key, matchesKey } from "@earendil-works/pi-tui";
+import type { PanelCommand } from "./keymap.ts";
+import { keyMapLines, resolvePanelCommand } from "./keymap.ts";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   ACTIONS,
@@ -76,7 +77,11 @@ export type SidebarProps = {
   readonly theme: Theme;
   /** Shown inside the frame; the overlay needs it, the dock knows it is the sidebar. */
   readonly header: string | null;
+  /** Repaint request, for the local state this component owns (`?`, `d`). */
+  readonly requestRender: () => void;
   readonly onClose: () => void;
+  /** Commands the component does not own: running git verbs is the host's job. */
+  readonly onCommand: (command: PanelCommand) => void;
 };
 
 const MIN_WIDTH = 24;
@@ -88,6 +93,8 @@ function heading(theme: Theme, label: string): string {
 
 export function createSidebar(props: SidebarProps): Component {
   const theme = props.theme;
+  let helpVisible = false;
+  let filesVisible = false;
 
   const frame = (segment: string): string => theme.fg("border", segment);
 
@@ -114,7 +121,9 @@ export function createSidebar(props: SidebarProps): Component {
       data.repository === "ok" && data.branch !== null ? renderBranch(data, row, column, theme) : [];
 
     const resultStyle = stylish(theme, data.result?.kind);
-    const result: string[] = [row(data.result === null ? "" : resultStyle(data.result.line))];
+    const result: string[] = helpVisible
+      ? keyMapLines().map((line) => row(theme.fg("muted", rightEllipsis(line, column))))
+      : [row(data.result === null ? "" : resultStyle(data.result.line))];
 
     const model: string[] = [
       row(heading(theme, SECTION_MODEL)),
@@ -139,7 +148,23 @@ export function createSidebar(props: SidebarProps): Component {
     render,
     invalidate: () => {},
     handleInput(data: string): void {
-      if (matchesKey(data, Key.escape)) props.onClose();
+      const command = resolvePanelCommand(data);
+      if (command === null) return;
+      if (command === "close") {
+        props.onClose();
+        return;
+      }
+      if (command === "help") {
+        helpVisible = !helpVisible;
+        props.requestRender();
+        return;
+      }
+      if (command === "toggle-files") {
+        filesVisible = !filesVisible;
+        props.requestRender();
+        return;
+      }
+      props.onCommand(command);
     },
   };
 }

@@ -66,7 +66,9 @@ pi-click-sidebar/                    (repository root = package root)
     ├── view/
     │   ├── model.ts           ~85  snapshot + session → PanelData (pure)
     │   ├── copy.ts            ~73  every user-visible string
-    │   ├── text.ts            ~52  visibleWidth helpers: ellipsis, padding, spread
+    │   ├── text.ts            ~70  visibleWidth helpers: ellipsis, padding, spread, counts
+    │   ├── keymap.ts          ~57  key → panel command (pure)
+    │   ├── rail.ts           ~145  one-line widget for regular mode
     │   ├── sidebar.ts        ~211  dock/overlay component
     │   ├── rail.ts            ~80  one-line widget (regular mode)
     │   └── branch-modal.ts   ~150  select + input overlay
@@ -74,7 +76,8 @@ pi-click-sidebar/                    (repository root = package root)
         ├── dock.ts           ~120  probe, wrap, reconcile
         ├── present.ts         ~25  pick the host: dock, else overlay
         ├── overlay.ts         ~43  show/hide the panel as an overlay
-        ├── refresh.ts        ~110  one timer, shortstat throttle, backoff
+        ├── refresh.ts        ~111  one timer, shortstat throttle, backoff
+        ├── keymap.ts          ~49  `alt+g` toggle, unavailable-verb copy
         └── keymap.ts          ~50  focus and verb dispatch
 ```
 
@@ -248,6 +251,8 @@ slice gates cover them by hand).
 | `view/model.test.ts` | width 28/34/44 line budgets; middle-ellipsis of a long path; branch right-ellipsis at 26; number formatting (`0`, `999`, `12.4k`, `1.2M`); stale marker; every `GitErrorCode` produces a result line |
 | `view/copy.test.ts` | no string contains a newline or a tab; every key used by the model exists; the copy deck's literal shapes |
 | `git/refs.test.ts` | option-like and empty names are rejected before any spawn |
+| `view/rail.test.ts` | the truncation ladder at 160/80/30 columns; the path keeps its last segment; no width produces an over-wide line |
+| `view/keymap.test.ts` | every documented key resolves; unknown input returns `null` so the editor keeps it |
 | `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults; first-run creation; `PI_CODING_AGENT_DIR` resolution |
 
 ## 10. Package manifest

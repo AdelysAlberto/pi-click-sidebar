@@ -8,6 +8,8 @@ import { createGitRun } from "../src/git/exec.ts";
 import { readSnapshot } from "../src/git/snapshot.ts";
 import { createPresenter } from "../src/host/present.ts";
 import { createRefresher, type Refresher } from "../src/host/refresh.ts";
+import { describeUnavailable, registerToggle } from "../src/host/keymap.ts";
+import type { PanelCommand } from "../src/view/keymap.ts";
 import { NO_MODEL } from "../src/view/copy.ts";
 import { buildPanelData, type SessionInfo } from "../src/view/model.ts";
 import type { PanelData } from "../src/view/sidebar.ts";
@@ -15,13 +17,34 @@ import type { PanelData } from "../src/view/sidebar.ts";
 const COMMAND = "sidebar";
 
 export default function clickSidebar(pi: ExtensionAPI): void {
-  const presenter = createPresenter();
   const git = createGitRun((command, args, options) => pi.exec(command, args, options));
 
   let cached: ConfigLoad | undefined;
   let refresher: Refresher | undefined;
+  let activeCtx: ExtensionContext | undefined;
   let session: SessionInfo = { cwd: ".", modelId: NO_MODEL, thinking: "off", contextPercent: null };
   let stale = false;
+
+  /** Verbs reach the actions layer in slice 5 and the modal in slice 6. */
+  const runCommand = (command: PanelCommand): void => {
+    const ctx = activeCtx;
+    if (ctx === undefined) return;
+    if (command === "refresh") {
+      refresher?.markDirty();
+      void refresher?.refreshNow().then(() => presenter.repaint());
+      return;
+    }
+    const unavailable = describeUnavailable(command);
+    if (unavailable !== null) ctx.ui.notify(`click-sidebar: ${unavailable}`, "info");
+  };
+
+  const presenter = createPresenter({
+    onCommand: runCommand,
+    onRailOpen: () => {
+      const ctx = activeCtx;
+      if (ctx !== undefined) void openPanel(ctx);
+    },
+  });
 
   /** Loads once per session and reports each problem exactly once. */
   const config = (ctx: ExtensionContext): ConfigLoad => {
@@ -55,8 +78,21 @@ export default function clickSidebar(pi: ExtensionAPI): void {
 
   const initialData = (): PanelData => buildPanelData({ snapshot: null, error: null, session, stale: false });
 
+  const openPanel = async (ctx: ExtensionContext): Promise<void> => {
+    const settings = config(ctx).config;
+    if (settings.mode === "off") {
+      ctx.ui.notify("click-sidebar: mode is off, see /sidebar config", "info");
+      return;
+    }
+    activeCtx = ctx;
+    session = sessionInfo(ctx);
+    await refresher?.refreshNow();
+    await presenter.show(ctx, () => refresher?.current() ?? initialData());
+  };
+
   const start = (ctx: ExtensionContext): void => {
     const settings = config(ctx).config;
+    activeCtx = ctx;
     session = sessionInfo(ctx);
     stale = false;
     refresher?.dispose();
@@ -68,10 +104,12 @@ export default function clickSidebar(pi: ExtensionAPI): void {
       onUpdate: () => presenter.repaint(),
     });
     refresher.start();
+    presenter.mountRail(ctx, () => refresher?.current() ?? initialData());
   };
 
   /** Refresh on the events that change what the panel shows, never a write. */
   const touch = (ctx: ExtensionContext): void => {
+    activeCtx = ctx;
     session = sessionInfo(ctx);
     refresher?.markDirty();
   };
@@ -82,9 +120,17 @@ export default function clickSidebar(pi: ExtensionAPI): void {
   pi.on("user_bash", async (_event, ctx) => touch(ctx));
   pi.on("model_select", async (_event, ctx) => touch(ctx));
   pi.on("session_compact", async (_event, ctx) => touch(ctx));
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    presenter.unmountRail(ctx);
     refresher?.dispose();
     refresher = undefined;
+    activeCtx = undefined;
+  });
+
+  registerToggle(pi, {
+    isOpen: () => presenter.isOpen(),
+    open: (ctx) => openPanel(ctx),
+    close: () => presenter.closeOpen(),
   });
 
   pi.registerCommand(COMMAND, {
@@ -105,10 +151,7 @@ export default function clickSidebar(pi: ExtensionAPI): void {
         ctx.ui.notify("click-sidebar: mode is off, see /sidebar config", "info");
         return;
       }
-
-      session = sessionInfo(ctx);
-      await refresher?.refreshNow();
-      await presenter.show(ctx, () => refresher?.current() ?? initialData());
+      await openPanel(ctx);
     },
   });
 }

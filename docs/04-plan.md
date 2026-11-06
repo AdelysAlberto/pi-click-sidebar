@@ -141,6 +141,16 @@ concurrently. Reading the tree never blocks a frame: the panel keeps rendering t
 pi --tui-mode regular -e ./.
 ```
 
+**Result (2026-11-06): done.** Captured from a live regular-mode session at 80×30 and 150×45: one line,
+`cs-dirty  …/cs-dirty  ⎇ main  ✚1 +3 −2  deepseek-flash·medium  alt+g` at 80 (70 columns used) and the
+same with the untruncated path at 150 (79 columns). `alt+g` opened the panel with its PROJECT section and
+`esc` closed it, which is the whole rail action set, so the keyboard path is complete. Typing `hello` in
+the editor landed in the editor and left the rail untouched: the widget never sees editor input.
+
+Two behaviour corrections came out of the live run and are now the shipped rule: the ladder drops and
+shrinks in the order the UX spec states (the path goes first), and the first refresh tick runs immediately
+instead of after one interval, because a panel that waits shows an empty model.
+
 ## S4 — Dock lane
 
 `host/dock.ts`: capability probe, `HStack` wrap, reconciliation, mode selection, `/sidebar mode ...`.

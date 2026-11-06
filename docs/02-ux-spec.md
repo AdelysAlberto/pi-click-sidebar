@@ -80,15 +80,19 @@ right columns — that trade is the documented reason it is the fallback, not th
 
 ### 2.3 Rail fallback (regular mode / `tuiMode: "regular"`)
 
-One line above the editor. Clicking any segment opens the overlay fallback.
+One line above the editor. Clicking a segment acts on what it shows: project, branch and changes open the
+panel (the branch modal once Slice 6 lands), and the model is informative. Regular mode leaves mouse input
+to the terminal, so the keyboard path is the one that must be complete: `alt+g` opens and closes the panel
+from anywhere, and every verb inside it has a key.
 
 ```text
  acme-web  ~/Projects/acme/web  ⎇ feat/new-sidebar  ✚2 +70 −8  ds-v4·med  alt+g
 ```
 
-Segments are separate `MouseRegion`s: project → focus Project, branch → open the branch modal, changes →
-open the changes list overlay, model → no action (informative). All truncation is width-driven from the
-right; the project path is what disappears first.
+Segments are separate `MouseRegion`s. All truncation is width-driven and ordered by a single ladder in
+`view/rail.ts`: the project path shrinks to 12 columns keeping its last segment, is then dropped, then the
+branch shrinks and is dropped, then the project and model shrink, then the model is dropped, and only at
+the very end is the line hard-truncated.
 
 ## 3. Width rules
 

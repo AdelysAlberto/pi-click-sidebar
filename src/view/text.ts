@@ -25,6 +25,9 @@ export function middleEllipsis(text: string, width: number): string {
   const tail = parts.length > 1 ? parts[parts.length - 1] ?? "" : "";
   const candidate = tail.length > 0 && tail !== head ? `/${head}/${ELLIPSIS}/${tail}` : `${ELLIPSIS}${tail}`;
   if (visibleWidth(candidate) <= width) return candidate;
+  // Out of room for both ends: keep the tail, which is the identifying part.
+  const tailOnly = `${ELLIPSIS}/${tail}`;
+  if (tail.length > 0 && visibleWidth(tailOnly) <= width) return tailOnly;
   return truncateToWidth(text, width, ELLIPSIS);
 }
 

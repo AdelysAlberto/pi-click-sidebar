@@ -88,7 +88,8 @@ export function createRefresher(options: RefresherOptions): Refresher {
   return {
     start(): void {
       if (stopped || timer !== undefined) return;
-      schedule();
+      // First read now: a panel that waits one interval shows an empty model.
+      void tick();
     },
     stop(): void {
       if (timer !== undefined) clearTimeout(timer);
