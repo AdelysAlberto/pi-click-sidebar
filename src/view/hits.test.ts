@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hitTest, region, type HitMap } from "./hits.ts";
+import type { TuiMouseEvent } from "@earendil-works/pi-tui";
+import { hitTest, isActivation, region, type HitMap } from "./hits.ts";
 
 function map(): HitMap {
   return {
@@ -48,4 +49,32 @@ test("hit testing follows the last render, so a resize cannot leave stale target
   assert.deepEqual(hitTest(narrow, 4, 6), { kind: "changes" });
   assert.equal(hitTest(narrow, 4, 8), null, "the row from the wider layout is gone");
   assert.deepEqual(hitTest(wide, 4, 8), { kind: "changes" });
+});
+
+const event = (type: TuiMouseEvent["type"], button: TuiMouseEvent["button"] = "left"): TuiMouseEvent => ({
+  type,
+  button,
+  x: 4,
+  y: 8,
+  screenX: 20,
+  screenY: 16,
+  width: 36,
+  height: 20,
+  shift: false,
+  alt: false,
+  ctrl: false,
+});
+
+test("a physical click activates once: the press is not an activation", () => {
+  // A press answers `undefined`, so the host keeps the gesture for selection and
+  // dispatches the synthesised click. Answering both ran every action twice.
+  assert.equal(isActivation(event("press")), false);
+  assert.equal(isActivation(event("click")), true);
+});
+
+test("a right click, a drag and a release are not activations", () => {
+  assert.equal(isActivation(event("click", "right")), false);
+  assert.equal(isActivation(event("drag")), false);
+  assert.equal(isActivation(event("release")), false);
+  assert.equal(isActivation(event("wheel")), false);
 });

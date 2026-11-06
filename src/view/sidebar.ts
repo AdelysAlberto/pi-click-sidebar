@@ -8,7 +8,7 @@
  */
 import type { Component, TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { hitTest, type HitAction, type HitMap } from "./hits.ts";
+import { hitTest, isActivation, type HitAction, type HitMap } from "./hits.ts";
 import { keyMapLines, resolvePanelCommand, type PanelCommand } from "./keymap.ts";
 import {
   actionsSection,
@@ -201,7 +201,7 @@ export function createSidebar(props: SidebarProps): Component {
     },
 
     handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-      if (event.type !== "press" && event.type !== "click") return undefined;
+      if (!isActivation(event)) return undefined;
       const action = hitTest(hits, event.x, event.y);
       if (action === null) return undefined;
       props.onAction?.(action);

@@ -51,44 +51,46 @@ pi-click-sidebar/                    (repository root = package root)
 ├── schema/
 │   └── config.schema.json          validates <agent-dir>/pi-click-sidebar.json
 ├── extensions/
-│   └── click-sidebar.ts       ~90  entry point, no logic
+│   └── click-sidebar.ts     239  entry point: config, timer, events, wiring
 └── src/
-    ├── config.ts             ~230  defaults, read/validate, atomic write, describe
-    ├── config.test.ts         ~99  defaults, clamping, corruption, first-run creation
-    ├── result.ts              ~50  Result helpers
+    ├── config.ts            244  defaults, read/validate, atomic write, describe
+    ├── config.test.ts       112  defaults, clamping, corruption, first-run creation
+    ├── result.ts             51  Result helpers
     ├── git/
-    │   ├── exec.ts            ~57  runGit(): argv, timeout, killed→timeout, code
-    │   ├── status.ts         ~231  porcelain-v2 parser + totals + shortstat (pure)
-    │   ├── repo.ts            ~52  toplevel probe, operation markers, short oid
-    │   ├── snapshot.ts        ~68  one read of the tree: probe + status + deltas
-    │   ├── refs.ts            ~77  branch list, name validation, existence
-    │   ├── switch.ts          ~52  switch / switch -c, dirty guard
-    │   ├── actions.ts        ~190  fetch, pull, push: guards, argv, classification
-    │   └── actions.ts        ~150  fetch/pull/push/switch/create + guards
+    │   ├── exec.ts           74  runGit(): argv, timeout, killed→timeout, code
+    │   ├── status.ts        231  porcelain-v2 parser + totals + shortstat (pure)
+    │   ├── repo.ts           52  toplevel probe, operation markers, short oid
+    │   ├── snapshot.ts       66  one read of the tree: probe + status + deltas
+    │   ├── refs.ts           77  branch list, name validation, existence
+    │   ├── switch.ts         52  switch / switch -c, dirty guard
+    │   └── actions.ts       203  fetch, pull, push: guards, argv, classification
     ├── view/
-    │   ├── model.ts           ~85  snapshot + session → PanelData (pure)
-    │   ├── copy.ts            ~73  every user-visible string
-    │   ├── text.ts            ~70  visibleWidth helpers: ellipsis, padding, spread, counts
-    │   ├── keymap.ts          ~57  key → panel command (pure)
-    │   ├── hits.ts            ~45  click regions and hit test (pure)
-    │   ├── surface.ts         ~52  which surface is in effect (pure)
-    │   ├── panel-sections.ts ~211  the six sections, their rows and click ranges
-    │   ├── rail.ts           ~145  one-line widget for regular mode
-    │   ├── sidebar.ts        ~173  the panel component: frame, rows, keys, clicks
-    │   ├── rail.ts            ~80  one-line widget (regular mode)
-    │   ├── branch-modal.ts   ~208  base list + name field, submit plan (pure)
+    │   ├── model.ts          94  snapshot + session → PanelData (pure)
+    │   ├── copy.ts           74  every user-visible string
+    │   ├── keymap.ts         61  key → panel command (pure)
+    │   ├── hits.ts           57  click regions, hit test, the activation rule (pure)
+    │   ├── text.ts          113  width helpers: ellipsis, wrap, padding, counts (pure)
+    │   ├── surface.ts        43  which surface is in effect (pure)
+    │   ├── panel-sections.ts 231  the six sections, their rows and click ranges
+    │   ├── rail.ts          145  one-line widget for regular mode
+    │   ├── sidebar.ts       211  the panel component: frame, rows, keys, clicks
+    │   └── branch-modal.ts  250  base list + name field, submit plan (pure)
     └── host/
-        ├── dock.ts           ~106  probe, HStack wrap, reconcile, restore
-        ├── commands.ts        ~56  `/sidebar config` and `/sidebar mode`
-        ├── action-runner.ts  ~130  one verb at a time, progress line, result hold
-        ├── branch-flow.ts     ~95  opens the modal, runs the switch it returns
-        ├── dispatch.ts        ~70  key or click → the same command
-        ├── present.ts         ~25  pick the host: dock, else overlay
-        ├── overlay.ts         ~43  show/hide the panel as an overlay
-        ├── refresh.ts        ~111  one timer, shortstat throttle, backoff
-        ├── keymap.ts          ~55  `alt+g` toggle (focus when the lane is up)
-        └── keymap.ts          ~50  focus and verb dispatch
+        ├── dock.ts          106  probe, HStack wrap, reconcile, restore
+        ├── commands.ts       56  `/sidebar config` and `/sidebar mode`
+        ├── action-runner.ts 141  one verb at a time, progress line, result hold
+        ├── branch-flow.ts    96  opens the modal, runs the switch it returns
+        ├── dispatch.ts       74  key or click → the same command
+        ├── present.ts       244  pick the surface, own focus, mount the lane
+        ├── repaint.ts        50  who wants a frame, replaced per surface
+        ├── overlay.ts        81  show the panel as an overlay
+        ├── lane.ts           34  mounts the dock lane from a probe widget
+        ├── refresh.ts       118  one timer, shortstat throttle, backoff, `active`
+        └── keymap.ts         61  `alt+g` toggle (focus when the lane is up)
 ```
+
+The entry point is 3 lines over the ceiling (`AGENTS.md` §3.2); extracting its mounting and event wiring
+into `host/` is pending.
 
 Components are **factory functions returning objects** (`{render, handleMouse?, handleInput?,
 invalidate, dispose?}`), never classes: pi-tui only requires the shape.
@@ -173,21 +175,27 @@ credential helper.
 One timer for the whole extension. A second timer is a bug, not a layout choice.
 
 ```text
-tick (default 3000 ms)
+tick (default 6000 ms; the operator's file may say 3000)
   ├─ if a tick is still in flight → skip (reentrancy guard)
+  ├─ if nothing draws the model (`mode: off`) → no process, no frame
+  ├─ nothing marked dirty and this is not the shortstat tick → no process at all
   ├─ reconcile dock (§01 §1)               cheap, no process
-  ├─ git status                            always
-  ├─ git diff --shortstat HEAD             every 3rd tick, or right after an event
+  ├─ git status                            every tick that reads
+  ├─ git diff --shortstat HEAD             the shortstat tick (every 3rd), any dirty tick, refreshNow
   └─ requestRender()                       only when the ViewModel changed (deep compare on a
                                            small frozen object), so idle ticks cost no frames
 ```
 
 Event-driven refresh, wired once in `host/refresh.ts`: `session_start`, `turn_end`,
 `tool_execution_end`, `user_bash`, `model_select`, `session_compact`, plus every completed git action.
-Events set `dirty = true`; the next tick does the work. No work is done while an action is running.
+Events set `dirty = true`; the next tick does the work. An action does not suspend the timer: the reads
+are read-only and cannot cancel what the operator started.
 
-Cost, stated honestly: two `git` processes every 3 s on a large repository. The mitigation is the
-throttled `--shortstat` (the status command is the cheap one) and the change check before rendering.
+Cost, stated honestly: two `git` processes per tick on a large repository, and three on a tick that also
+asks for `--shortstat`. Measured on a 3 000-file tree with 800 dirty paths (`probe+status` 18 ms,
+`probe+status+shortstat` 78 ms) and on this repository (13 ms / 15 ms): a working session at 3 s intervals
+spent 483 ms of git CPU per 16 s there and 88 ms here, with a heap that does not grow. The mitigation is
+the throttled `--shortstat` (the status command is the cheap one) and the change check before rendering.
 The interval is config (`refreshIntervalMs`), and the first measurable thing after Slice 2 is the
 per-tick wall time on a big repo; if it exceeds 40 ms, the interval doubles before anything else is
 touched.
@@ -282,8 +290,12 @@ slice gates cover them by hand).
 | `view/keymap.test.ts` | every documented key resolves; unknown input returns `null` so the editor keeps it |
 | `view/surface.test.ts` | the surface decision for every mode, width and probe outcome, including each fallback |
 | `host/dock.test.ts` | a fake viewport TUI: the probe rejects regular mode, the wrap puts one lane at the configured width, reconcile re-wraps after a re-assert without doubling it, restore is idempotent |
-| `view/hits.test.ts` | a click inside a region reports its action; borders, padding, the wrong row and stale rows do not |
-| `view/branch-modal.test.ts` | the submit plan: switch, create, dirty-tree block, and every invalid name with its exact reason |
+| `view/hits.test.ts` | a click inside a region reports its action; borders, padding, the wrong row and stale rows do not; only a left `click` activates, never the `press`, a drag, a release or a right click |
+| `view/sidebar.test.ts` | a full gesture (press + synthesised click) runs one verb once; the press alone runs nothing; each verb in a row is its own target; the frame is not a target |
+| `view/text.test.ts` | word wrap fills to the column, never splits inside a word, splits a word wider than the column without losing it, and produces no line wider than the width for widths 1..60 |
+| `host/present.test.ts` | a remounted rail replaces its repaint listener (one repaint, one render), and unmounting leaves none behind |
+| `host/refresh.test.ts` | the first tick reads with the deltas; an idle tick that is not the shortstat tick spawns nothing; `markDirty` forces the next tick; a read in flight is never overlapped; three failures back off to 15 s; an unchanged model does not repaint; `active: false` reads nothing; `dispose` stops the timer |
+| `view/branch-modal.test.ts` | the submit plan: switch, create, dirty-tree block, and every invalid name with its exact reason; one click on `switch` submits once |
 | `config.test.ts` | defaults; unknown key warning; out-of-range clamping; corrupt JSON → defaults; first-run creation; `PI_CODING_AGENT_DIR` resolution |
 
 ## 10. Package manifest

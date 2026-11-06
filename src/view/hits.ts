@@ -6,6 +6,7 @@
  * The map is rebuilt on every render because the rows move with the data: a
  * section that appears or disappears shifts everything below it.
  */
+import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 
 export type HitAction =
   | { readonly kind: "verb"; readonly verb: string }
@@ -31,6 +32,23 @@ export function hitTest(map: HitMap, x: number, y: number): HitAction | null {
     if (region.row === y && x >= region.start && x <= region.end) return region.action;
   }
   return null;
+}
+
+/**
+ * Whether a mouse event is the operator activating what is under the pointer.
+ *
+ * One physical click reaches a component **twice**: `press` on the way down and
+ * a synthesised `click` on release (`pi-tui/dist/tui-alt-screen.js:721-742`
+ * dispatches the press to the pressed target and then, for a release that did
+ * not move, a `click` to the same target). Answering both ran every action
+ * twice: a verb click started `fetch` and the second call was refused with
+ * "fetch is still running", and the modal's `switch` button submitted twice.
+ *
+ * Only `click` activates. It is never emitted when the pointer moved between
+ * press and release, and `left` keeps a right click from starting a write.
+ */
+export function isActivation(event: TuiMouseEvent): boolean {
+  return event.type === "click" && event.button === "left";
 }
 
 /** A rectangle for one piece of text placed at `start` on `row`. */

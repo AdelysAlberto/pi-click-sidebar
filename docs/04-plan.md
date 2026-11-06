@@ -334,7 +334,10 @@ The first session with a human at the keyboard found four things unit tests coul
 | "the app is frozen, my typing disappears" | with the dock focused, unbound keys were dropped instead of forwarded | printable keys go to the editor and focus returns; the frame and a hint row show focus |
 | "`fetch is still running` forever" | a `git fetch` to a silent remote blocks for the whole network timeout, and the progress ticker repainted five times a second | `esc` cancels the verb through the `AbortSignal`; the ticker is one repaint per second; the error message is no longer rewritten into a fake timeout |
 | "the modal buttons are not clickable" | `actionsRow` was measured after the hint row, so clicks landed one row away and the hint row submitted | the row index is taken before the hint is pushed, and the button ranges come from the render |
+| "clicking `fetch` says `fetch is still running`" | one physical click reaches a component twice (`press`, then a synthesised `click` on release) and the panel answered both, so the second call was refused as "still running". The modal's `switch` submitted twice for the same reason. | only a left `click` activates (`view/hits.ts` → `isActivation`); a `press`, a drag, a release and a right click do not |
 | "`s` did nothing" | the panel needs focus, and nothing said so | `alt+g focus` is shown while unfocused |
+| "`✗ pull · no upstream branch c…`" | the result slot was one row measured against the lane width, so git's reason was clipped at the ellipsis | the result line is word-wrapped into as many rows as it needs and the frame grows by them |
+| "`alt+g` focused nothing and the frame never turned accent" | `mountDock` built the lane twice, so `getFocusedComponent()` never matched the drawn component; the rail also kept one repaint listener per remount, so a single repaint rendered the frame once per past mount | one component per mount, and the repaint listener is replaced instead of added (`host/repaint.ts`) |
 
 ## Out of scope for v1
 

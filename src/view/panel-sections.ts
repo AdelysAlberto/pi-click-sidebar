@@ -24,7 +24,7 @@ import {
   untracked,
 } from "./copy.ts";
 import type { HitAction } from "./hits.ts";
-import { displayPath, middleEllipsis, rightEllipsis, spread } from "./text.ts";
+import { displayPath, middleEllipsis, rightEllipsis, spread, wrapToWidth } from "./text.ts";
 import type { PanelData } from "./sidebar.ts";
 
 export type RowFactory = (styled: string) => string;
@@ -208,7 +208,13 @@ export function resultSection(context: SectionContext): Section {
   // A finished result keeps its colour for six seconds and then stays dimmed.
   const expired = result.at !== undefined && Date.now() - result.at > RESULT_HOLD_MS;
   const style = expired && result.kind === "ok" ? stylish(theme, undefined) : stylish(theme, result.kind);
-  return { name: "result", lines: [row(style(result.line))], hits: [] };
+  // git's own reason is the useful part; a single clipped row turned "no upstream
+  // branch configured for pull" into "no upstream branch c…".
+  return {
+    name: "result",
+    lines: wrapToWidth(result.line, column).map((part) => row(style(part))),
+    hits: [],
+  };
 }
 
 export function modelSection(context: SectionContext): Section {

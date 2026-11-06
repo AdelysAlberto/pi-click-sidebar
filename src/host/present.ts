@@ -10,6 +10,7 @@ import { selectSurface, type Surface } from "../view/surface.ts";
 import { OVERLAY_HEADER } from "../view/copy.ts";
 import { mountDock, probeDockSupport, type DockHandle } from "./dock.ts";
 import { OVERLAY_WIDTH, showPanel } from "./overlay.ts";
+import { createRepaint } from "./repaint.ts";
 
 export { OVERLAY_WIDTH };
 
@@ -60,7 +61,7 @@ export type PanelPresenter = {
  * the same component; what differs is who owns the frame.
  */
 export function createPresenter(options: PresenterOptions): PanelPresenter {
-  const listeners = new Set<() => void>();
+  const frames = createRepaint();
   let closeCurrent: (() => void) | undefined;
   let dock: DockHandle | null = null;
   let laneTheme: Theme | undefined;
@@ -74,9 +75,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
     getFocusedComponent?: () => Component | null;
   };
 
-  const repaint = (): void => {
-    for (const listener of listeners) listener();
-  };
+  const repaint = (): void => frames.repaint();
 
   const lane = (read: () => PanelData, theme: Theme): Component =>
     createSidebar({
@@ -100,6 +99,26 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
     });
 
   const dockSupport = (): boolean => probeDockSupport(tuiHost).supported;
+
+  /**
+   * The lane is built once per mount. Focus and blur compare component
+   * identity, so a second instance meant `getFocusedComponent()` never matched
+   * the drawn panel: the frame never said "focused" and `alt+g` focused a
+   * component nobody renders.
+   */
+  const mountLane = (tui: unknown, read: () => PanelData): DockHandle | null => {
+    const theme = options.getTheme();
+    const component = lane(read, theme);
+    const handle = mountDock(tui, {
+      laneWidth: options.config().dockWidth,
+      minTerminalWidth: options.config().dockMinTerminalWidth,
+      lane: component,
+    });
+    if (handle === null) return null;
+    laneComponent = component;
+    laneTheme = theme;
+    return handle;
+  };
 
   const surface = (columns: number): Surface =>
     selectSurface({
@@ -144,7 +163,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
       ctx.ui.setWidget(
         RAIL_KEY,
         (tui, widgetTheme) => {
-          listeners.add(() => tui.requestRender());
+          frames.replace(() => tui.requestRender());
           tuiMode = tui.mode;
           tuiHost = tui;
           return createRail({
@@ -159,6 +178,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
     },
 
     unmountRail(ctx: ExtensionContext): void {
+      frames.clear();
       ctx.ui.setWidget(RAIL_KEY, undefined);
     },
 
@@ -170,16 +190,9 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
         dock.reconcile();
         return true;
       }
-      const theme = options.getTheme();
-      const handle = mountDock(tui, {
-        laneWidth: options.config().dockWidth,
-        minTerminalWidth: options.config().dockMinTerminalWidth,
-        lane: lane(read, theme),
-      });
+      const handle = mountLane(tui, read);
       if (handle === null) return false;
       dock = handle;
-      laneTheme = theme;
-      laneComponent = lane(read, theme);
       return true;
     },
 
@@ -211,10 +224,7 @@ export function createPresenter(options: PresenterOptions): PanelPresenter {
               close();
             };
           },
-          attach: (listener) => {
-            listeners.add(listener);
-            return () => listeners.delete(listener);
-          },
+          attach: (listener) => frames.listen(listener),
         });
       } finally {
         closeCurrent = undefined;

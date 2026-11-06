@@ -7,6 +7,7 @@
  */
 import type { Component } from "@earendil-works/pi-tui";
 import { Input, Key, matchesKey, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { isActivation } from "./hits.ts";
 import { padToWidth, rightEllipsis } from "./text.ts";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Branch } from "../git/refs.ts";
@@ -168,7 +169,7 @@ export function createBranchModal(props: BranchModalProps): Component {
     invalidate: () => input.invalidate(),
 
     handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-      if (event.type !== "press" && event.type !== "click") return undefined;
+      if (!isActivation(event)) return undefined;
       const index = event.y - listStart;
       if (index >= 0 && index < props.branches.length && event.x > 0 && event.x <= columnWidth) {
         selected = index;
